@@ -13,11 +13,20 @@
 
 	const max = $derived(Math.max(1, ...values));
 	const peak = $derived(values.indexOf(Math.max(...values)));
-	const summary = $derived(
-		values.some((v) => v > 0)
-			? `${label}: picco a ${MONTH_NAMES[peak]?.toLowerCase()} con ${formatNumber(values[peak] ?? 0)} ${unit}`
-			: `${label}: nessun dato`
+	const monthlyValues = $derived(
+		values
+			.map(
+				(value, i) =>
+					`${MONTH_NAMES[i]?.toLowerCase() ?? `mese ${i + 1}`}: ${formatNumber(value)} ${unit}`
+			)
+			.join('; ')
 	);
+	const peakSummary = $derived(
+		values.some((v) => v > 0)
+			? `picco a ${MONTH_NAMES[peak]?.toLowerCase()} con ${formatNumber(values[peak] ?? 0)} ${unit}`
+			: 'nessun dato'
+	);
+	const summary = $derived(`${label}: ${peakSummary}. Valori mensili: ${monthlyValues}`);
 </script>
 
 <figure class="bars" aria-label={summary}>

@@ -83,13 +83,16 @@ export function renderQuoteCard(
 	ctx.stroke();
 	ctx.restore();
 
-	// Virgolette grandi
+	// Virgolette grandi: aperta a sinistra, chiusa specchiata a destra
 	ctx.save();
 	ctx.globalAlpha = 0.5;
 	ctx.fillStyle = palette.accent;
 	ctx.font = `400 260px ${fonts.display}`;
 	ctx.textBaseline = 'alphabetic';
-	ctx.fillText('“', MARGIN - 10, 330);
+	ctx.textAlign = 'left';
+	ctx.fillText('«', MARGIN - 10, 330);
+	ctx.textAlign = 'right';
+	ctx.fillText('»', CARD_WIDTH - MARGIN + 10, 330);
 	ctx.restore();
 
 	// Citazione: corpo adattato al riquadro

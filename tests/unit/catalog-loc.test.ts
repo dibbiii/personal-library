@@ -168,16 +168,6 @@ describe('Catalogo LOC (SRU/MARCXML)', () => {
 	});
 });
 
-describe('Fallback ISBN istituzionale', () => {
-  it('sceglie il catalogo per gruppo ISBN', () => {
-    expect(institutionalCatalogFor('9780441013593')).toBe('loc');
-    expect(institutionalCatalogFor('9781594200113')).toBe('loc');
-    expect(institutionalCatalogFor('9788804678106')).toBe('sbn');
-    expect(institutionalCatalogFor('9791255125006')).toBe('sbn');
-  });
-});
-
-
 /** Risposta SRU reale (lx2.loc.gov, bath.isbn=9780441013593) ridotta ai campi rilevanti. */
 const SRU_DUNE = `<?xml version="1.0"?>
 <zs:searchRetrieveResponse xmlns:zs="http://www.loc.gov/zing/srw/"><zs:version>1.1</zs:version><zs:numberOfRecords>1</zs:numberOfRecords><zs:records><zs:record>

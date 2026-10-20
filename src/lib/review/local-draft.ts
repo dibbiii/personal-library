@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ratingSchema } from '../contracts/primitives';
 import type { ReviewDraft } from './draft';
+import { filterActiveThemeTagSlugs } from './tags';
 
 /**
  * Bozza locale (localStorage): serve finché la recensione non è salvabile (mancano voto o
@@ -48,7 +49,14 @@ export function readLocalDraft(bookId: string): LocalDraft | null {
 		const raw = storage()?.getItem(KEY_PREFIX + bookId);
 		if (!raw) return null;
 		const parsed = localDraftSchema.safeParse(JSON.parse(raw));
-		return parsed.success ? parsed.data : null;
+		if (!parsed.success) return null;
+		return {
+			...parsed.data,
+			draft: {
+				...parsed.data.draft,
+				tags: filterActiveThemeTagSlugs(parsed.data.draft.tags)
+			}
+		};
 	} catch {
 		return null;
 	}

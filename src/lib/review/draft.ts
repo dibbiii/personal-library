@@ -4,6 +4,7 @@ import type { Review } from '../contracts/reviews';
 import { ratingSchema, uuidSchema } from '../contracts/primitives';
 import { ADJECTIVE_MAX_LENGTH, areAdjectivesValid } from './adjectives';
 import { dimensionKeysForGenre, scoresForGenre, type DimensionScores } from './dimensions';
+import { filterActiveThemeTagSlugs } from './tags';
 
 /** Stato editabile della recensione lato UI (i tag sono identificati per slug). */
 export interface ReviewDraft {
@@ -26,7 +27,7 @@ export function draftFromReview(review: Review | null, genre: GenreSlug): Review
 			Object.fromEntries(review.scores.map((s) => [s.dimensionKey, s.score])),
 			genre
 		),
-		tags: review.tags.map((t) => t.slug)
+		tags: filterActiveThemeTagSlugs(review.tags.map((t) => t.slug))
 	};
 }
 
@@ -103,7 +104,7 @@ export function toSaveRequest(
 		scores: order
 			.filter((key) => draft.scores[key] !== undefined)
 			.map((key) => ({ dimensionKey: key, score: draft.scores[key] as number })),
-		tagSlugs: [...draft.tags]
+		tagSlugs: filterActiveThemeTagSlugs(draft.tags)
 	};
 }
 

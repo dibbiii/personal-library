@@ -227,6 +227,30 @@ describe('bozza e salvataggio', () => {
 		expect(draftFromReview(null, 'classics')).toEqual(emptyDraft());
 	});
 
+	it('scarta i tag legacy inattivi dal draft e dalla richiesta di salvataggio', () => {
+		const reviewWithLegacyTag = {
+			...review,
+			tags: [...review.tags, { id: 10, slug: 'adventure', label: 'Adventure' }]
+		};
+		const draft = draftFromReview(reviewWithLegacyTag, 'fantasy-magical-gothic');
+
+		expect(draft.tags).toEqual(['magic']);
+		expect(toSaveRequest(review.userBookId, 'fantasy-magical-gothic', draft)?.tagSlugs).toEqual([
+			'magic'
+		]);
+		expect(
+			saveReviewRequestSchema.safeParse(
+				toSaveRequest(review.userBookId, 'fantasy-magical-gothic', draft)
+			).success
+		).toBe(true);
+
+		// Anche una bozza locale precedente che conserva uno slug nascosto non lo reinvia.
+		const staleDraft = { ...draft, tags: [...draft.tags, 'adventure'] };
+		expect(
+			toSaveRequest(review.userBookId, 'fantasy-magical-gothic', staleDraft)?.tagSlugs
+		).toEqual(['magic']);
+	});
+
 	it('richiede solo il voto e conserva 0-3 aggettivi nella richiesta', () => {
 		expect(missingFields(emptyDraft())).toEqual(['rating']);
 		expect(missingFields({ ...emptyDraft(), rating: 3 })).toEqual([]);

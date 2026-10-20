@@ -8,7 +8,13 @@ create function public.get_profile_summary(
 returns jsonb language plpgsql stable security definer set search_path = '' as $$
 declare
   v_uid uuid := private.require_uid();
+  v_timezone text;
 begin
+  select coalesce(p.timezone, 'UTC')
+    into v_timezone
+  from public.profiles p
+  where p.id = v_uid;
+
   return public.get_profile_summary(p_collections, p_activity_limit) ||
     jsonb_build_object(
       'dnfCountForYear',
@@ -27,7 +33,7 @@ begin
         where ub.user_id = v_uid
           and ub.lifecycle_state = 'dnf'
           and ub.completed_readings_count = 0
-          and extract(year from r.ended_at)::integer = p_year
+          and extract(year from (r.ended_at at time zone coalesce(v_timezone, 'UTC')))::integer = p_year
       )
     );
 end $$;

@@ -244,6 +244,58 @@ test.describe('aggiungi un libro', () => {
 		expect(page.url()).toContain(`/book/${book?.id}`);
 	});
 
+	test('non si può annullare mentre l’aggiunta è in corso', async ({ page, account }) => {
+		let releaseAddResponse!: () => void;
+		const addResponseReleased = new Promise<void>((resolve) => {
+			releaseAddResponse = resolve;
+		});
+		let signalAddReachedServer!: () => void;
+		const addReachedServer = new Promise<void>((resolve) => {
+			signalAddReachedServer = resolve;
+		});
+		let addRequests = 0;
+		await page.route('**/api/library/add', async (route) => {
+			if (route.request().method() !== 'POST') {
+				await route.continue();
+				return;
+			}
+			addRequests++;
+			const response = await route.fetch();
+			signalAddReachedServer();
+			await addResponseReleased;
+			await route.fulfill({ response });
+		});
+
+		try {
+			await page.goto('/add/manual');
+			await page.waitForLoadState('networkidle');
+			const title = `Salvataggio in corso ${randomUUID().slice(0, 8)}`;
+			await page.getByLabel('Titolo').fill(title);
+			await page.getByLabel('Autore').fill('Autore di prova');
+			await page.getByRole('button', { name: 'Continua' }).click();
+
+			const sheet = page.getByRole('dialog', { name: 'Aggiungi alla libreria' });
+			await choose(sheet, 'Classici');
+			await sheet.getByRole('button', { name: 'Aggiungi', exact: true }).click();
+			await addReachedServer;
+
+			const cancel = sheet.getByRole('button', { name: 'Annulla', exact: true });
+			await expect(cancel).toBeDisabled();
+			await sheet.focus();
+			await page.keyboard.press('Escape');
+			await expect(sheet).toBeVisible();
+			await page.locator('.scrim').click({ position: { x: 5, y: 5 } });
+			await expect(sheet).toBeVisible();
+
+			expect((await userBooks(account.id)).filter((book) => book.title === title)).toHaveLength(1);
+			expect(addRequests).toBe(1);
+		} finally {
+			releaseAddResponse();
+		}
+
+		await page.waitForURL(/\/book\/[0-9a-f-]{36}$/);
+	});
+
 	test('ricerca con risultati simulati: sceglie un candidato e lo aggiunge', async ({
 		page,
 		account
@@ -858,15 +910,31 @@ test.describe('aggiungi un libro', () => {
 			`Aggiungi volume 2 di ${seriesName}`
 		);
 
-		// Ricerca, scansione e manuale conservano i dati della serie
+		const carriedParams = {
+			title: 'Titolo precompilato',
+			isbn: '9788804678378',
+			q: 'ricerca precompilata'
+		};
+		for (const [key, value] of Object.entries(carriedParams)) {
+			addUrl.searchParams.set(key, value);
+		}
+		await page.goto(addUrl.toString());
+
+		// Ricerca, scansione e manuale conservano la serie e i parametri precompilati
 		const tabs = page.getByRole('navigation', { name: 'Modi per aggiungere un libro' });
 		const searchTab = await tabs.getByRole('link', { name: /^Cerca/ }).getAttribute('href');
 		const scanTab = await tabs.getByRole('link', { name: /Scansiona ISBN/ }).getAttribute('href');
-		for (const href of [searchTab, scanTab]) {
+		const manualTab = await tabs
+			.getByRole('link', { name: /^Inserisci manualmente/ })
+			.getAttribute('href');
+		for (const href of [searchTab, scanTab, manualTab]) {
 			const url = new URL(href ?? '', ORIGIN);
 			expect(url.searchParams.get('seriesName')).toBe(seriesName);
 			expect(url.searchParams.get('seriesNumber')).toBe('2');
 			expect(url.searchParams.get('seriesTotal')).toBe('3');
+			for (const [key, value] of Object.entries(carriedParams)) {
+				expect(url.searchParams.get(key)).toBe(value);
+			}
 		}
 		await page.goto(scanTab ?? '/add/scan');
 		await expect(page.getByRole('link', { name: 'Vai alla ricerca' })).toBeVisible();
@@ -881,6 +949,9 @@ test.describe('aggiungi un libro', () => {
 			expect(url.searchParams.get('seriesName')).toBe(seriesName);
 			expect(url.searchParams.get('seriesNumber')).toBe('2');
 			expect(url.searchParams.get('seriesTotal')).toBe('3');
+			for (const [key, value] of Object.entries(carriedParams)) {
+				expect(url.searchParams.get(key)).toBe(value);
+			}
 		}
 		await page.getByRole('link', { name: 'Inserisci a mano', exact: true }).click();
 		await page.waitForURL(/\/add\/manual/);
@@ -888,6 +959,7 @@ test.describe('aggiungi un libro', () => {
 		// Il libro manuale entra già nello sheet con serie, numero e totale
 		await page.getByLabel('Titolo').fill(secondTitle);
 		await page.getByLabel('Autore').fill('Autore Serie');
+		await page.getByLabel('ISBN (facoltativo)').fill('');
 		await page.getByRole('button', { name: 'Continua' }).click();
 		const secondSheet = page.getByRole('dialog', { name: 'Aggiungi alla libreria' });
 		await expect(secondSheet.getByLabel('Nome della serie')).toHaveValue(seriesName);

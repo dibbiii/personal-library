@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildAddHref,
 	getAddContext,
+	getAddModeParams,
 	getAddSeriesContext,
 	getAddSeriesParams,
 	parseAddGenre
@@ -120,6 +121,23 @@ describe('contesto del flusso aggiunta', () => {
 		});
 		expect(destination.searchParams.get('genre')).toBe('classics');
 		expect(destination.searchParams.has('q')).toBe(false);
+	});
+
+	it('conserva titolo, ISBN e ricerca nei link tra le modalità', () => {
+		const params = getAddModeParams(
+			url(
+				'/add/search?seriesName=Saga%20del%20gatto&seriesNumber=2&seriesTotal=4&title=Il%20gatto%20%26%20il%20libro&isbn=9788804678378&q=ricerca%20iniziale'
+			)
+		);
+
+		for (const path of paths) {
+			const destination = url(buildAddHref(path, 'classics', params));
+			expect(destination.searchParams.get('title')).toBe('Il gatto & il libro');
+			expect(destination.searchParams.get('isbn')).toBe('9788804678378');
+			expect(destination.searchParams.get('q')).toBe('ricerca iniziale');
+			expect(destination.searchParams.get('seriesName')).toBe('Saga del gatto');
+			expect(destination.searchParams.get('genre')).toBe('classics');
+		}
 	});
 
 	it.each([

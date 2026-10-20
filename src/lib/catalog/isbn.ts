@@ -98,3 +98,17 @@ export function firstValidIsbn(values: readonly string[] | null | undefined): Pa
 	}
 	return null;
 }
+
+export type InstitutionalCatalogId = 'sbn' | 'loc';
+
+/**
+ * Catalogo istituzionale del fallback ISBN, scelto dal gruppo di registrazione dell'ISBN-13
+ * (non dalla lingua dell'utente): editoria italiana (978-88, 979-12) -> SBN;
+ * editoria angloamericana (978-0, 978-1) -> Library of Congress; ogni altro gruppo -> SBN,
+ * come avveniva prima dell'aggiunta di LOC.
+ */
+export function institutionalCatalogFor(isbn13: string): InstitutionalCatalogId {
+	if (/^(97888|97912)/.test(isbn13)) return 'sbn';
+	if (/^978[01]/.test(isbn13)) return 'loc';
+	return 'sbn';
+}

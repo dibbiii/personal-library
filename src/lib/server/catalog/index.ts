@@ -6,6 +6,7 @@ import { DiscoverService } from './discover';
 import { serverEnv } from '../db/env';
 import { InventaireProvider } from './inventaire';
 import { SbnProvider } from './sbn';
+import { LocProvider } from './loc';
 
 export { CatalogService } from './service';
 export { OpenLibraryProvider } from './open-library';
@@ -29,7 +30,9 @@ export function getCatalogService(): CatalogService {
 		],
 		fallbackProviders: [
 			new InventaireProvider(),
-			...(serverEnv('SBN_BRIDGE_URL') ? [new SbnProvider(serverEnv('SBN_BRIDGE_URL')!)] : [])
+			...(serverEnv('SBN_BRIDGE_URL') ? [new SbnProvider(serverEnv('SBN_BRIDGE_URL')!)] : []),
+			// Fallback istituzionale dei gruppi angloamericani; nessuna configurazione richiesta.
+			new LocProvider()
 		]
 	}));
 }

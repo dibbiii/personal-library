@@ -2,7 +2,7 @@ import type { EditionCandidate } from '$lib/contracts/books';
 import type { BookSearchRequest } from '$lib/contracts/rpc';
 
 /** Provider di metadati supportati (lato server). */
-export type CatalogProviderId = 'open-library' | 'google-books' | 'inventaire' | 'sbn';
+export type CatalogProviderId = 'open-library' | 'google-books' | 'inventaire' | 'sbn' | 'loc';
 
 export interface ProviderCallOptions {
 	signal?: AbortSignal | undefined;

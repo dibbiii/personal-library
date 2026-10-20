@@ -34,6 +34,7 @@ export const providerSchema = z.enum([
 	'google-books',
 	'inventaire',
 	'sbn',
+	'loc',
 	'manual'
 ]);
 

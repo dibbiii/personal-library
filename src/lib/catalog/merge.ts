@@ -14,6 +14,7 @@ export function identityKeys(candidate: EditionCandidate): string[] {
 	if (ids.googleBooksId) keys.push(`gb:${ids.googleBooksId}`);
 	if (ids.inventaireId) keys.push(`inv:${ids.inventaireId}`);
 	if (ids.sbnId) keys.push(`sbn:${ids.sbnId}`);
+	if (ids.locId) keys.push(`loc:${ids.locId}`);
 	return keys;
 }
 
@@ -43,6 +44,9 @@ export function mergeCandidates(
 				: {}),
 			...(primary.providerIds.sbnId || secondary.providerIds.sbnId
 				? { sbnId: primary.providerIds.sbnId ?? secondary.providerIds.sbnId }
+				: {}),
+			...(primary.providerIds.locId || secondary.providerIds.locId
+				? { locId: primary.providerIds.locId ?? secondary.providerIds.locId }
 				: {})
 		},
 		workTitle: primary.workTitle,

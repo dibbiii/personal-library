@@ -137,9 +137,9 @@
 	</ProfileCard>
 
 	<ProfileCard icon="flower" title="Libri non finiti" class="c-dnf">
-		<p class="hero-num">{formatNumber(summary.dnfCount)}</p>
+		<p class="hero-num">{formatNumber(summary.dnfCountForYear)}</p>
 		<p class="sub">
-			{countLabel(summary.dnfCount, 'libro abbandonato', 'libri abbandonati')} nel {year}
+			{countLabel(summary.dnfCountForYear, 'libro abbandonato', 'libri abbandonati')} nel {year}
 		</p>
 		<a class="ghost-link" href={tabHref('dnf')}>Apri il cimitero DNF</a>
 	</ProfileCard>

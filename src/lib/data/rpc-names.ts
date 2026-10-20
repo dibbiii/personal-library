@@ -19,6 +19,7 @@ export const RPC = {
 
 	readingCalendar: 'get_reading_calendar',
 	yearStats: 'get_year_stats',
+	yearDnfCount: 'get_year_dnf_count',
 	statsDashboard: 'get_stats_dashboard',
 
 	bingoBoard: 'get_bingo_board',

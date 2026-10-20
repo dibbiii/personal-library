@@ -13,11 +13,11 @@ import { RPC } from './rpc-names';
 
 export class RpcPerformanceRepository {
 	constructor(private readonly transport: RpcTransport) {}
-	getProfileSummary(collections: boolean, activityLimit: number) {
+	getProfileSummary(collections: boolean, activityLimit: number, year: number) {
 		return callRpc(
 			this.transport,
 			RPC.profileSummary,
-			{ p_collections: collections, p_activity_limit: activityLimit },
+			{ p_collections: collections, p_activity_limit: activityLimit, p_year: year },
 			profileSummarySchema
 		);
 	}

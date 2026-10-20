@@ -18,6 +18,7 @@
 		year: number;
 		currentYear: number;
 		currentYearBooksRead: number;
+		dnfCount: number;
 		physicalBooksUnread: number;
 		physicalBooks: number;
 		digitalBooks: number;
@@ -36,6 +37,7 @@
 		year,
 		currentYear,
 		currentYearBooksRead,
+		dnfCount,
 		physicalBooksUnread,
 		physicalBooks,
 		digitalBooks,
@@ -165,8 +167,8 @@
 		</StatCard>
 
 		<StatCard icon="flower" label="Libri non finiti" class="dnf-count">
-			<p class="value v24">{formatNumber(dnf.length)}</p>
-			<p class="sub">{countLabel(dnf.length, 'abbandonato', 'abbandonati')} nel {year}</p>
+			<p class="value v24">{formatNumber(dnfCount)}</p>
+			<p class="sub">{countLabel(dnfCount, 'abbandonato', 'abbandonati')} nel {year}</p>
 		</StatCard>
 
 		<StatCard icon="tag" label="Tag più usati" class="tags">

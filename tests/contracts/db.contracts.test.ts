@@ -18,6 +18,7 @@ import {
   statsDashboardResponseSchema,
   themeMutationResponseSchema,
   yearStatsResponseSchema,
+  yearDnfCountResponseSchema,
   userGenreShelvesResponseSchema,
 } from '../../src/lib/contracts';
 import { runDb } from '../helpers/env'; // first: sets DATABASE_URL defaults
@@ -631,13 +632,18 @@ import './seed.contracts';
         p_event_id: eventId,
         p_reading_id: started.reading.id,
         p_page: 58,
-        p_occurred_at: '2026-04-03T19:00:00+00:00',
-        p_local_date: '2026-04-03',
+        p_occurred_at: '2026-01-01T07:30:00+00:00',
+        p_local_date: '2025-12-31',
       },
       readingMutationResultSchema,
     );
 
     expect(dnf.reading.status).toBe('dnf');
+    await fx.sql`
+      update public.profiles
+      set timezone = 'America/Los_Angeles'
+      where id = ${fx.userId}::uuid
+    `;
 
     const summary2026 = await expectRpcContract(
       fx.client,
@@ -646,7 +652,7 @@ import './seed.contracts';
       profileSummarySchema,
     );
     expect(summary2026.dnfCount).toBe(1);
-    expect(summary2026.dnfCountForYear).toBe(1);
+    expect(summary2026.dnfCountForYear).toBe(0);
 
     const summary2025 = await expectRpcContract(
       fx.client,
@@ -655,7 +661,15 @@ import './seed.contracts';
       profileSummarySchema,
     );
     expect(summary2025.dnfCount).toBe(1);
-    expect(summary2025.dnfCountForYear).toBe(0);
+    expect(summary2025.dnfCountForYear).toBe(1);
+
+    const selectedYearCount = await expectRpcContract(
+      fx.client,
+      'get_year_dnf_count',
+      { p_year: 2025 },
+      yearDnfCountResponseSchema,
+    );
+    expect(selectedYearCount.count).toBe(1);
   });
 
   it('calendar and annual statistics validate against their contracts', async () => {

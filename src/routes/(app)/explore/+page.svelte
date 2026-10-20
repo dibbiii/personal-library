@@ -239,7 +239,7 @@
 					<DiscoverShelf
 						title="Consigliati per te"
 						subtitle={recommendedTopics.length > 0
-							? 'Basati sui generi che leggi di più.'
+							? 'Basati sui generi più presenti nella tua libreria.'
 							: 'I libri più amati dai lettori: aggiungine qualcuno e i consigli diventano tuoi.'}
 						query={{ ...filterQuery, section: 'recommended', topics: recommendedTopics, limit: 20 }}
 						{owned}
@@ -294,6 +294,7 @@
 
 <DiscoverBookSheet
 	book={openBook}
+	language={filters.lang === 'all' ? null : filters.lang}
 	ownedId={openOwnedId}
 	onclose={() => (openBook = null)}
 	onadd={add}

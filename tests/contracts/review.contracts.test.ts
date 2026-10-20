@@ -69,6 +69,10 @@ describe('review/quote contracts (senza DB)', () => {
     const ref = await expectRpcContract(fx.client, 'get_review_reference', {}, reviewReferenceResponseSchema);
     expect(ref.tags).toHaveLength(20);
     expect(ref.tags[0]).toMatchObject({ slug: 'romantico', label: 'Romantico' });
+    expect(ref.tags).toContainEqual(expect.objectContaining({ slug: 'spicy', label: 'Spicy' }));
+    expect(ref.tags).toContainEqual(
+      expect.objectContaining({ slug: 'thriller-psicologico', label: 'Thriller psicologico' }),
+    );
     expect(ref.dimensions).toHaveLength(40);
     expect(
       ref.dimensions.filter((d) => d.genreSlug === 'essays').map((d) => d.dimensionKey),

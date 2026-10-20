@@ -24,6 +24,7 @@ import { runDb } from '../helpers/env'; // first: sets DATABASE_URL defaults
 import { createContractFixture, type ContractFixture } from '../helpers/fixture';
 import { expectRpcContract } from '../helpers/rpc';
 import { closeAdminSql, createTestUser } from '../helpers/users';
+import { profileSummarySchema } from '../../src/lib/contracts/performance';
 import './migrations.contracts';
 import './auth.contracts';
 import './rls.contracts';
@@ -328,7 +329,7 @@ import './seed.contracts';
         ) values
           (
             ${volumeOneId}::uuid, ${fx.userId}::uuid, 5, 'Volume uno', 'Autore',
-            'physical', null, null, null
+            'physical', ${seriesName}, 1, 3
           ),
           (
             ${volumeThreeId}::uuid, ${fx.userId}::uuid, 5, 'Volume tre', 'Autore',
@@ -370,6 +371,125 @@ import './seed.contracts';
     } finally {
       await otherUser.cleanup();
     }
+  });
+
+  it('change_book_series preserves an existing destination total when moving volumes', async () => {
+    const destinationVolumeOneId = randomUUID();
+    const destinationVolumeEightId = randomUUID();
+    const knownTotalBookId = randomUUID();
+    const unknownTotalBookId = randomUUID();
+    const destinationSeries = `Serie destinazione ${randomUUID()}`;
+    const sourceSeries = `Serie origine ${randomUUID()}`;
+    await fx.sql`
+      insert into public.user_books (
+        id, user_id, genre_id, title, author_display, format, series_name, series_number, series_total
+      ) values
+        (
+          ${destinationVolumeOneId}::uuid, ${fx.userId}::uuid, 5, 'Destinazione uno', 'Autore',
+          'physical', ${destinationSeries}, 1, 8
+        ),
+        (
+          ${destinationVolumeEightId}::uuid, ${fx.userId}::uuid, 5, 'Destinazione otto', 'Autore',
+          'physical', ${destinationSeries}, 8, 8
+        ),
+        (
+          ${knownTotalBookId}::uuid, ${fx.userId}::uuid, 5, 'Volume con totale noto', 'Autore',
+          'physical', ${sourceSeries}, 5, 5
+        ),
+        (
+          ${unknownTotalBookId}::uuid, ${fx.userId}::uuid, 5, 'Volume senza totale', 'Autore',
+          'physical', null, null, null
+        )
+    `;
+
+    const movedFromKnownTotal = await expectRpcContract(
+      fx.client,
+      'change_book_series',
+      {
+        p_book_id: knownTotalBookId,
+        p_series_name: destinationSeries,
+        p_series_number: 6,
+        p_series_total: 5
+      },
+      bookSeriesChangeResponseSchema
+    );
+    const movedFromUnknownTotal = await expectRpcContract(
+      fx.client,
+      'change_book_series',
+      {
+        p_book_id: unknownTotalBookId,
+        p_series_name: destinationSeries,
+        p_series_number: 7,
+        p_series_total: null
+      },
+      bookSeriesChangeResponseSchema
+    );
+    const destinationRows = await fx.sql<{ series_number: number; series_total: number }[]>`
+      select series_number::int as series_number, series_total
+      from public.user_books
+      where user_id = ${fx.userId}::uuid
+        and lower(btrim(series_name)) = lower(btrim(${destinationSeries}))
+      order by series_number
+    `;
+
+    expect(movedFromKnownTotal.book.series?.total).toBe(8);
+    expect(movedFromUnknownTotal.book.series?.total).toBe(8);
+    expect(destinationRows).toEqual([
+      { series_number: 1, series_total: 8 },
+      { series_number: 6, series_total: 8 },
+      { series_number: 7, series_total: 8 },
+      { series_number: 8, series_total: 8 }
+    ]);
+  });
+
+  it('change_book_series applies a renamed series total only to the moved book', async () => {
+    const movedBookId = randomUUID();
+    const remainingBookId = randomUUID();
+    const sourceSeries = `Serie originale ${randomUUID()}`;
+    const newSeries = `Serie rinominata ${randomUUID()}`;
+    await fx.sql`
+      insert into public.user_books (
+        id, user_id, genre_id, title, author_display, format, series_name, series_number, series_total
+      ) values
+        (
+          ${movedBookId}::uuid, ${fx.userId}::uuid, 5, 'Volume spostato', 'Autore',
+          'physical', ${sourceSeries}, 1, 5
+        ),
+        (
+          ${remainingBookId}::uuid, ${fx.userId}::uuid, 5, 'Volume rimasto', 'Autore',
+          'physical', ${sourceSeries}, 2, 5
+        )
+    `;
+
+    const changed = await expectRpcContract(
+      fx.client,
+      'change_book_series',
+      {
+        p_book_id: movedBookId,
+        p_series_name: newSeries,
+        p_series_number: 1,
+        p_series_total: 8
+      },
+      bookSeriesChangeResponseSchema
+    );
+    const rows = await fx.sql<{
+      id: string;
+      series_name: string;
+      series_total: number;
+    }[]>`
+      select id::text, series_name, series_total
+      from public.user_books
+      where id in (${movedBookId}::uuid, ${remainingBookId}::uuid)
+    `;
+
+    expect(changed.book.series).toEqual({ name: newSeries, number: 1, total: 8 });
+    expect(Object.fromEntries(rows.map(({ id, series_name, series_total }) => [
+      id,
+      { series_name, series_total }
+    ]))).toEqual({
+      [movedBookId]: { series_name: newSeries, series_total: 8 },
+      [remainingBookId]: { series_name: sourceSeries, series_total: 5 }
+    });
   });
 
   it('change_book_series rejects totals below existing volumes without partial updates', async () => {
@@ -456,7 +576,15 @@ import './seed.contracts';
     expect(genre.sections[0].books[0]?.id).toBe(fx.books.fantasy);
   });
 
-  it('historical completed reading matches the same mutation contract', async () => {
+  it('historical completed reading removes its queued book in the same mutation', async () => {
+    const queued = await expectRpcContract(
+      fx.client,
+      'queue_add',
+      { p_book_id: fx.books.mythology, p_force: true },
+      queueAddResponseSchema,
+    );
+    expect(queued.queue.some((entry) => entry.book.id === fx.books.mythology)).toBe(true);
+
     const result = await expectRpcContract(
       fx.client,
       'add_completed_reading',
@@ -472,6 +600,14 @@ import './seed.contracts';
 
     expect(result.reading.startPage).toBe(10);
     expect(result.reading.status).toBe('completed');
+
+    const [{ count }] = (await fx.sql`
+      select count(*)::int as count
+      from public.reading_queue
+      where user_id = ${fx.userId}::uuid
+        and user_book_id = ${fx.books.mythology}::uuid
+    `) as unknown as [{ count: number }];
+    expect(count).toBe(0);
   });
 
   it('DNF is idempotent and appears in dashboard cemetery', async () => {
@@ -502,6 +638,24 @@ import './seed.contracts';
     );
 
     expect(dnf.reading.status).toBe('dnf');
+
+    const summary2026 = await expectRpcContract(
+      fx.client,
+      'get_profile_summary',
+      { p_collections: false, p_activity_limit: 0, p_year: 2026 },
+      profileSummarySchema,
+    );
+    expect(summary2026.dnfCount).toBe(1);
+    expect(summary2026.dnfCountForYear).toBe(1);
+
+    const summary2025 = await expectRpcContract(
+      fx.client,
+      'get_profile_summary',
+      { p_collections: false, p_activity_limit: 0, p_year: 2025 },
+      profileSummarySchema,
+    );
+    expect(summary2025.dnfCount).toBe(1);
+    expect(summary2025.dnfCountForYear).toBe(0);
   });
 
   it('calendar and annual statistics validate against their contracts', async () => {

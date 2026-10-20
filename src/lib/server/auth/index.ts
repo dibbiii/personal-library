@@ -150,15 +150,18 @@ export async function authenticate(email: string, password: string): Promise<Aut
 }
 
 /**
- * Deletes the account and, through ON DELETE CASCADE, every row the user owns
- * (library, readings, reviews, sessions, ...), then their cover files.
+ * Deletes cover files before the account. If filesystem cleanup fails, the
+ * account remains available for a retry; if account deletion fails, its
+ * transaction leaves the account usable even though its covers are gone.
+ * Deleting the account cascades every row the user owns (library, readings,
+ * reviews, sessions, ...).
  * Authorisation is the caller's job (re-check the password first in the UI).
  */
 export async function deleteAccount(userId: string): Promise<void> {
+	await deleteUserCovers(userId);
 	await withUser(userId, async (tx) => {
 		await tx`select app.delete_account(${userId}::uuid)`;
 	});
-	await deleteUserCovers(userId);
 }
 
 // ---------------------------------------------------------------------------

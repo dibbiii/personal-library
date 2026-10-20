@@ -14,6 +14,7 @@ import type {
 	ShelfPageResponse,
 	StartReadingInput,
 	StatsDashboardResponse,
+	YearDnfCountResponse,
 	YearStatsResponse,
 	AddCompletedReadingInput,
 	FinishReadingInput,
@@ -138,6 +139,7 @@ export interface ExploreRepository {
 export interface StatsRepository {
 	getCalendar(year: number): Promise<ReadingCalendarResponse>;
 	getYearStats(year: number): Promise<YearStatsResponse>;
+	getYearDnfCount(year: number): Promise<YearDnfCountResponse>;
 	getDashboard(year: number): Promise<StatsDashboardResponse>;
 }
 

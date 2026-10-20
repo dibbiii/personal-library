@@ -106,6 +106,10 @@
 		return Object.keys(next).length === 0;
 	}
 
+	function closeIfNotBusy() {
+		if (!busy) onclose();
+	}
+
 	async function submit(force = false) {
 		if (!draft || busy) return;
 		error = '';
@@ -174,7 +178,7 @@
 	{open}
 	title={mode === 'edit' ? 'Modifica libro' : 'Aggiungi alla libreria'}
 	subtitle={mode === 'edit' ? 'Conferma le modifiche' : 'Conferma come vuoi averlo'}
-	{onclose}
+	onclose={closeIfNotBusy}
 >
 	{#if draft}
 		<div class="preview">
@@ -206,7 +210,9 @@
 							Aggiungi comunque
 						</Button>
 					{/if}
-					<Button variant="ghost" fullWidth onclick={onclose}>Annulla</Button>
+					<Button variant="ghost" fullWidth disabled={busy} onclick={closeIfNotBusy}>
+						Annulla
+					</Button>
 				</div>
 			</div>
 		{:else}
@@ -299,7 +305,9 @@
 				{/if}
 
 				<div class="actions row">
-					<Button variant="secondary" fullWidth onclick={onclose}>Annulla</Button>
+					<Button variant="secondary" fullWidth disabled={busy} onclick={closeIfNotBusy}>
+						Annulla
+					</Button>
 					<Button type="submit" fullWidth loading={busy}
 						>{mode === 'edit'
 							? 'Salva modifiche'

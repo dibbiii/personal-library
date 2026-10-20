@@ -43,6 +43,7 @@ export const profileSummarySchema = z.object({
 	queueCount: nonNegativeIntSchema,
 	quoteCount: nonNegativeIntSchema,
 	dnfCount: nonNegativeIntSchema,
+	dnfCountForYear: nonNegativeIntSchema,
 	favorites: z.array(bookSummarySchema).max(5),
 	queue: z.array(bookSummarySchema).max(3),
 	reading: z.array(bookSummarySchema).max(3),

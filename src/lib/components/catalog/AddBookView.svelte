@@ -5,8 +5,8 @@
 	import {
 		buildAddHref,
 		getAddContext,
+		getAddModeParams,
 		getAddSeriesContext,
-		getAddSeriesParams,
 		type AddPath
 	} from '$lib/catalog/add-context';
 	import { CatalogClientError, fetchBookInfo, lookupIsbn } from '$lib/catalog/client';
@@ -33,7 +33,7 @@
 
 	const context = $derived(getAddContext(page.url));
 	const initialSeries = $derived(getAddSeriesContext(page.url));
-	const seriesParams = $derived(getAddSeriesParams(page.url));
+	const modeParams = $derived(getAddModeParams(page.url));
 	/** "Annulla" esce dall'aggiunta: torna allo scaffale di partenza o alla libreria. */
 	const exitHref = $derived(context.genre ? `/genre/${context.genre}` : '/library');
 
@@ -126,7 +126,7 @@
 	let scanExact = $state(false);
 	let scanError = $state('');
 	function manualAddHref(title: string, nextIsbn?: string): string {
-		const params = new SvelteURLSearchParams(seriesParams);
+		const params = new SvelteURLSearchParams(modeParams);
 		if (title) params.set('title', title);
 		if (nextIsbn) params.set('isbn', nextIsbn);
 		return buildAddHref('/add/manual', context.genre, params);
@@ -196,7 +196,7 @@
 		{#each tabs as tab (tab.mode)}
 			<a
 				class="tab"
-				href={buildAddHref(tab.href, context.genre, seriesParams)}
+				href={buildAddHref(tab.href, context.genre, modeParams)}
 				aria-current={tab.mode === mode ? 'page' : undefined}
 			>
 				<span class="tab-icon"><Icon name={tab.icon} size={22} /></span>
@@ -224,7 +224,7 @@
 				{#if scanPhase === 'scan'}
 					<ISBNScanner
 						{onscan}
-						searchHref={buildAddHref('/add/search', context.genre, seriesParams)}
+						searchHref={buildAddHref('/add/search', context.genre, modeParams)}
 						manualHref={manualAddHref('')}
 					/>
 				{:else if scanPhase === 'lookup'}

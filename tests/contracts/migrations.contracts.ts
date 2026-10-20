@@ -169,7 +169,7 @@ const USER_OWNED_TABLES = [
 					(select count(*)::int from public.tags) as tags,
 					(select count(*)::int from public.tags where is_active) as "activeTags"
 			`;
-			expect(counts).toEqual({ genres: 8, dims: 40, tags: 41, activeTags: 18 });
+			expect(counts).toEqual({ genres: 8, dims: 40, tags: 43, activeTags: 20 });
 		});
 
 		it('persists and reorders all eight personal shelves', async () => {

@@ -64,16 +64,22 @@
 		totalError = null;
 
 		const total = parseSeriesNumber(totalText);
+		// Prioritizza i volumi già presenti nella serie rispetto alla validazione del volume corrente.
+		const highest = Math.max(0, ...books.map((book) => book.number ?? 0));
+		if (
+			total !== null &&
+			total !== undefined &&
+			Number.isInteger(total) &&
+			total <= 999 &&
+			total < highest
+		) {
+			totalError = `Esiste già il volume ${volumeNumber(highest)}: il totale non può essere inferiore.`;
+			return;
+		}
+
 		const problem = validateSeriesFields(series.name, series.number, total);
 		if (problem || total === undefined) {
 			totalError = problem ?? 'Il totale dei volumi deve essere un intero tra 1 e 999.';
-			return;
-		}
-		// L'API traduce l'errore 22023 del database in un messaggio generico:
-		// il confronto con i volumi già presenti si fa qui, con un messaggio utile.
-		const highest = Math.max(0, ...books.map((book) => book.number ?? 0));
-		if (total !== null && total < highest) {
-			totalError = `Esiste già il volume ${volumeNumber(highest)}: il totale non può essere inferiore.`;
 			return;
 		}
 

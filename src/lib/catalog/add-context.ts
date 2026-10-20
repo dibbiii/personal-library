@@ -41,6 +41,16 @@ export function getAddSeriesParams(url: URL): URLSearchParams {
 	return params;
 }
 
+/** Mantiene titolo, ISBN e query di ricerca quando si cambia modalità. */
+export function getAddModeParams(url: URL): URLSearchParams {
+	const params = getAddSeriesParams(url);
+	for (const key of ['title', 'isbn', 'q'] as const) {
+		const value = url.searchParams.get(key);
+		if (value !== null) params.set(key, value);
+	}
+	return params;
+}
+
 /** Conserva i dati del fallback (ISBN/titolo), ma non propaga generi non validi. */
 export function buildAddHref(
 	path: AddPath,

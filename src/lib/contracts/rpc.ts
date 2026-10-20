@@ -32,6 +32,7 @@ import {
 	isoTimestampSchema,
 	localDateSchema,
 	nonEmptyTextSchema,
+	nonNegativeIntSchema,
 	pageNumberSchema,
 	positiveIntSchema,
 	ratingSchema,
@@ -101,6 +102,12 @@ export const readingCalendarResponseSchema = z.object({
 export const yearStatsResponseSchema = z.object({
 	contractVersion: contractVersionSchema,
 	stats: yearStatsSchema
+});
+
+export const yearDnfCountResponseSchema = z.object({
+	contractVersion: contractVersionSchema,
+	year: z.number().int().min(1900).max(2200),
+	count: nonNegativeIntSchema
 });
 
 export const statsDashboardResponseSchema = z.object({
@@ -303,6 +310,7 @@ export type BookDetailResponse = z.infer<typeof bookDetailResponseSchema>;
 export type ExplorePoolResponse = z.infer<typeof explorePoolResponseSchema>;
 export type ReadingCalendarResponse = z.infer<typeof readingCalendarResponseSchema>;
 export type YearStatsResponse = z.infer<typeof yearStatsResponseSchema>;
+export type YearDnfCountResponse = z.infer<typeof yearDnfCountResponseSchema>;
 export type StatsDashboardResponse = z.infer<typeof statsDashboardResponseSchema>;
 export type BingoBoardResponse = z.infer<typeof bingoBoardResponseSchema>;
 

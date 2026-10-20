@@ -22,6 +22,7 @@
 		calendarYear: number;
 		currentYear: number;
 		currentYearBooksRead: number;
+		dnfCount: number;
 		years: number[];
 		stats: YearStats;
 		genreBreakdown: { slug: GenreSlug; count: number }[];
@@ -118,9 +119,10 @@
 			stats={props.stats}
 			currentYear={props.currentYear}
 			currentYearBooksRead={props.currentYearBooksRead}
+			dnfCount={props.dnfCount}
 			physicalBooksUnread={counts.physicalUnread}
-			physicalBooks={counts.physical}
-			digitalBooks={counts.digital}
+			physicalBooks={counts.physical + counts.both}
+			digitalBooks={counts.digital + counts.both}
 			totalBooks={counts.total}
 			genreBreakdown={props.genreBreakdown}
 			bingo={props.bingo}

@@ -12,6 +12,7 @@ export interface BookDraft {
 	pageCount: number | null;
 	language: string | null;
 	isbn: string | null;
+	openLibraryEditionId: string | null;
 	coverUrl: string | null;
 	publisher: string | null;
 	publishedDate: string | null;
@@ -33,7 +34,8 @@ export function draftFromBook(book: BookSummary): BookDraft {
 		author: book.author,
 		pageCount: book.pageCount,
 		language: book.language,
-		isbn: null,
+		isbn: book.isbn ?? null,
+		openLibraryEditionId: book.openLibraryEditionId ?? null,
 		coverUrl: book.cover.coverUrl,
 		publisher: null,
 		publishedDate: null,
@@ -52,6 +54,7 @@ export function draftFromCandidate(
 		pageCount: candidate.pageCount,
 		language: candidate.language,
 		isbn: candidate.isbn13 ?? candidate.isbn10,
+		openLibraryEditionId: candidate.providerIds.openLibraryEditionId ?? null,
 		coverUrl: candidate.coverUrl,
 		publisher: candidate.publisher,
 		publishedDate: candidate.publishedDate,
@@ -145,6 +148,16 @@ function lastSegment(url: string): string | null {
 	return url.split('/').filter(Boolean).pop() ?? null;
 }
 
+export function isSameEdition(draft: BookDraft, edition: InfoEdition): boolean {
+	const editionId = lastSegment(edition.url);
+	return (
+		(edition.isbn13 !== null && edition.isbn13 === draft.isbn) ||
+		(editionId !== null &&
+			editionId ===
+				(draft.openLibraryEditionId ?? draft.edition?.providerIds.openLibraryEditionId ?? null))
+	);
+}
+
 /**
  * Passa a un'altra edizione dello stesso libro (dalle edizioni di Open Library):
  * editore, anno, pagine, ISBN e copertina sono quelli dell'edizione scelta.
@@ -155,10 +168,13 @@ export function draftWithEdition(
 	workUrl: string,
 	workTitle?: string
 ): BookDraft {
+	if (isSameEdition(draft, edition)) return draft;
+
 	const publishedDate = edition.year ? String(edition.year) : null;
 	return {
 		...draft,
 		coverFile: null,
+		openLibraryEditionId: lastSegment(edition.url),
 		title: edition.title === 'Senza titolo' ? draft.title : edition.title,
 		pageCount: edition.pages,
 		language: edition.language,

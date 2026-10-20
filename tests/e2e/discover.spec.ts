@@ -52,20 +52,77 @@ async function login(page: Page, email: string, password: string) {
 
 test('Esplora: sezioni, ricerca con filtri e aggiunta dal dettaglio', async ({ page }) => {
 	const requests: URLSearchParams[] = [];
+	const infoRequests: URLSearchParams[] = [];
 	await page.route('**/api/discover?*', async (route) => {
 		const params = new URL(route.request().url()).searchParams;
 		requests.push(params);
 		const section = params.get('section') ?? 'search';
 		const books =
 			section === 'search'
-				? [book('OL1W', `Risultato ${params.get('q') ?? ''}`.trim())]
+				? [
+						book('OL1W', `Risultato ${params.get('q') ?? ''}`.trim(), {
+							...(params.get('lang') === 'en'
+								? {
+										editionId: 'OL-EN',
+										coverUrl: 'https://covers.openlibrary.org/b/id/12-M.jpg',
+										language: 'en'
+									}
+								: {})
+						})
+					]
 				: [
 						book(`OL-${section}-1W`, `Libro ${section} uno`),
 						book(`OL-${section}-2W`, `Libro ${section} due`)
 					];
 		await route.fulfill({ json: { books, total: books.length, hasMore: false } });
 	});
-	await page.route('**/api/catalog/info*', (route) => route.fulfill({ json: { info: null } }));
+	await page.route('**/api/catalog/info*', async (route) => {
+		infoRequests.push(new URL(route.request().url()).searchParams);
+		await route.fulfill({
+			json: {
+				info: {
+					workTitle: 'Risultato drago',
+					workUrl: 'https://openlibrary.org/works/OL1W',
+					description: null,
+					firstSentence: null,
+					firstPublishYear: 2001,
+					subjects: [],
+					people: [],
+					places: [],
+					times: [],
+					rating: null,
+					readers: null,
+					editionCount: 2,
+					pagesMedian: null,
+					editions: [
+						{
+							title: 'Italian edition',
+							publisher: 'Italian publisher',
+							year: 2001,
+							language: 'it',
+							pages: 200,
+							isbn13: '9780000000000',
+							coverUrl: 'https://covers.openlibrary.org/b/id/11-M.jpg',
+							url: 'https://openlibrary.org/books/OL-IT'
+						},
+						{
+							title: 'Risultato drago',
+							publisher: 'English publisher',
+							year: 2001,
+							language: 'en',
+							pages: 220,
+							isbn13: '9780000000001',
+							coverUrl: 'https://covers.openlibrary.org/b/id/12-M.jpg',
+							url: 'https://openlibrary.org/books/OL-EN'
+						}
+					],
+					author: null,
+					authorWorks: [],
+					links: []
+				}
+			}
+		});
+	});
 
 	await page.goto('/explore');
 	await expect(page.getByRole('heading', { name: 'Scopri il tuo prossimo libro' })).toBeVisible();
@@ -94,14 +151,29 @@ test('Esplora: sezioni, ricerca con filtri e aggiunta dal dettaglio', async ({ p
 	await expect
 		.poll(() => requests.some((p) => p.get('q') === 'drago' && p.get('minRating') === '4'))
 		.toBe(true);
+	await page.getByLabel('Lingua', { exact: true }).selectOption('en');
+	await expect
+		.poll(() => requests.some((p) => p.get('q') === 'drago' && p.get('lang') === 'en'))
+		.toBe(true);
 
 	// Dettaglio e aggiunta: si passa sempre dalla conferma di genere e formato
 	await page.getByRole('button', { name: /^Risultato drago/ }).click();
 	const detail = page.getByRole('dialog', { name: 'Risultato drago' });
 	await expect(detail).toBeVisible();
+	await expect.poll(() => infoRequests.some((p) => p.get('language') === 'en')).toBe(true);
+	await expect(detail.locator('dl.facts').getByText('Inglese', { exact: true })).toBeVisible();
+	await expect(detail.getByRole('button', { name: /Scegli Edizione in inglese/ })).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await expect(detail.getByRole('button', { name: /Scegli Edizione in italiano/ })).toHaveAttribute(
+		'aria-pressed',
+		'false'
+	);
 	await detail.getByRole('button', { name: 'Aggiungi alla mia libreria' }).click();
 	const sheet = page.getByRole('dialog', { name: 'Aggiungi alla libreria' });
 	await expect(sheet.getByText('Risultato drago')).toBeVisible();
+	await expect(sheet.getByText(/Inglese/)).toBeVisible();
 	await sheet.getByRole('button', { name: 'Annulla' }).click();
 	await expect(sheet).toBeHidden();
 

@@ -32,6 +32,13 @@ export const THEME_TAGS: readonly ThemeTagDef[] = [
 	{ slug: 'thriller-psicologico', label: 'Thriller psicologico' }
 ];
 
+const ACTIVE_THEME_TAG_SLUGS = new Set(THEME_TAGS.map(({ slug }) => slug));
+
+/** Conserva solo gli slug presenti nel catalogo canonico dei tag attivi. */
+export function filterActiveThemeTagSlugs(slugs: readonly string[]): string[] {
+	return slugs.filter((slug) => ACTIVE_THEME_TAG_SLUGS.has(slug));
+}
+
 export function toggleTag(selected: readonly string[], slug: string): string[] {
 	return selected.includes(slug) ? selected.filter((s) => s !== slug) : [...selected, slug];
 }

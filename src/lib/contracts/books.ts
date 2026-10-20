@@ -46,6 +46,8 @@ export const seriesBookSchema = z.object({
 export const bookSummarySchema = z.object({
 	id: uuidSchema,
 	editionId: catalogIdSchema.nullable(),
+	isbn: z.string().nullable().optional(),
+	openLibraryEditionId: z.string().nullable().optional(),
 
 	title: nonEmptyTextSchema,
 	author: nonEmptyTextSchema,

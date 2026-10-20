@@ -6,7 +6,6 @@ import type {
 	RecordProgressInput,
 	StartReadingInput
 } from '../contracts/rpc';
-import { queueMutationResponseSchema } from '../contracts/rpc';
 import type { ReadingRepository } from './repositories';
 import type { RpcTransport } from './rpc-client';
 import { callRpc } from './rpc-client';
@@ -67,8 +66,8 @@ export class RpcReadingRepository implements ReadingRepository {
 		return this.event(RPC.markDnf, input);
 	}
 
-	async addCompletedReading(input: AddCompletedReadingInput) {
-		const result = await callRpc(
+	addCompletedReading(input: AddCompletedReadingInput) {
+		return callRpc(
 			this.transport,
 			RPC.addCompletedReading,
 			{
@@ -80,17 +79,6 @@ export class RpcReadingRepository implements ReadingRepository {
 			},
 			readingMutationResultSchema
 		);
-
-		// Un libro segnato come letto non è più "prossimo" (come accade con start_reading).
-		// queue_remove è idempotente: se il libro non è in coda non fa nulla.
-		await callRpc(
-			this.transport,
-			RPC.queueRemove,
-			{ p_book_id: input.bookId },
-			queueMutationResponseSchema
-		);
-
-		return result;
 	}
 
 	private event(

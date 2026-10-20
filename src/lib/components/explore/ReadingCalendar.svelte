@@ -120,7 +120,7 @@
 	</div>
 	<p class="lead">
 		Un pallino per ogni giorno di lettura. Se hai letto più generi lo stesso giorno, il pallino è
-		diviso a metà.
+		diviso a metà con due generi e in spicchi uguali con tre o più generi.
 	</p>
 
 	<ul class="legend" aria-label="Legenda dei generi">

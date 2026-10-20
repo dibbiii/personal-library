@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ServerCatalogRepository } from '../../src/lib/data/catalog-repository';
 import { sql, upsertCatalogEdition } from '../../src/lib/server/db';
-import type { UpdateBookInput } from '../../src/lib/catalog/schemas';
+import type { AddBookInput, AddBookResponse, UpdateBookInput } from '../../src/lib/catalog/schemas';
 import { runDb } from '../helpers/env';
 import { adminSql, createTestUser, type TestUser } from '../helpers/users';
 
@@ -134,7 +134,6 @@ import { adminSql, createTestUser, type TestUser } from '../helpers/users';
 	});
 
 	it('updates an existing library row and rejects an exact-edition duplicate', async () => {
-		const repository = new ServerCatalogRepository({} as never);
 		const bookId = randomUUID();
 		const duplicateBookId = randomUUID();
 		const title = `Contract ${tag} edited book`;
@@ -164,6 +163,30 @@ import { adminSql, createTestUser, type TestUser } from '../helpers/users';
 				publishedDate: '2024'
 			}
 		};
+		const trustedEdition = {
+			provider: 'open-library',
+			providerIds: input.edition?.providerIds,
+			workTitle: `${title} work`,
+			editionTitle: `${title} edition`,
+			authors: [author],
+			isbn10: null,
+			isbn13: isbn,
+			language: 'en',
+			publisher: `Contract ${tag} publisher`,
+			publishedDate: '2024',
+			pageCount: 280,
+			coverUrl: null,
+			confidence: 1,
+			matchReasons: []
+		};
+		const repository = new ServerCatalogRepository({
+			lookupIsbn: async () => ({
+				candidates: [trustedEdition],
+				degraded: false,
+				providers: {},
+				exactMatch: true
+			})
+		} as never);
 
 		await expect(repository.updateBook(user.id, randomUUID(), input)).rejects.toMatchObject({
 			code: 'NOT_FOUND'
@@ -223,6 +246,43 @@ import { adminSql, createTestUser, type TestUser } from '../helpers/users';
 			select title, format, edition_id::text
 			from public.user_books where id = ${duplicateBookId}::uuid`;
 		expect(unchanged).toEqual({ title: `Contract ${tag} second`, format: 'physical', edition_id: null });
+	});
+
+	it('keeps concurrent adds of the same ISBN to one library entry', async () => {
+		const repository = new ServerCatalogRepository({} as never);
+		const isbn = validIsbn13();
+		const input: AddBookInput = {
+			source: 'manual',
+			title: `Contract ${tag} concurrent add`,
+			author: `Contract ${tag} concurrent author`,
+			pageCount: 240,
+			language: 'it',
+			isbn,
+			genre: 'dystopia-scifi',
+			format: 'physical',
+			series: null,
+			coverUrl: null,
+			edition: null,
+			force: false
+		};
+
+		const results = await Promise.all(
+			Array.from({ length: 6 }, () => repository.addBook(user.id, input))
+		);
+		const added = results.filter((result) => result.status === 'added');
+		const duplicates = results.filter(
+			(result): result is Extract<AddBookResponse, { status: 'duplicate' }> =>
+				result.status === 'duplicate'
+		);
+
+		expect(added).toHaveLength(1);
+		expect(duplicates).toHaveLength(5);
+		const inserted = added[0];
+		if (!inserted || inserted.status !== 'added') throw new Error('Expected one inserted book');
+		expect(duplicates.every((result) => result.exact)).toBe(true);
+		expect(duplicates.map((result) => result.existing.id)).toEqual(
+			Array.from({ length: 5 }, () => inserted.bookId)
+		);
 	});
 
 	it('is safe under concurrent imports of the same book', async () => {

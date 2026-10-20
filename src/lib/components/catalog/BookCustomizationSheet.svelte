@@ -121,6 +121,7 @@
 		}
 
 		busy = true;
+		let saved = false; // aggiornamento riuscito: un errore successivo riguarda solo la copertina
 		try {
 			const series = seriesRefFromFields(seriesName, numberValue, totalValue);
 			if (mode === 'edit' && bookId) {
@@ -132,6 +133,8 @@
 					duplicate = { ...result.existing, exact: true };
 					return;
 				}
+				saved = true;
+				if (draft.coverFile) await uploadCover(bookId, draft.coverFile);
 				onclose();
 				onsaved?.(result.reviewScoresReset);
 				return;
@@ -152,11 +155,13 @@
 			error =
 				mode === 'add' && addedBookId
 					? 'Il libro è stato aggiunto, ma la copertina non è stata caricata. Puoi riprovare oppure aprire il libro.'
-					: caught instanceof CatalogClientError
-						? caught.message
-						: mode === 'edit'
-							? 'Non sono riuscito a salvare le modifiche. Riprova.'
-							: 'Non sono riuscito ad aggiungere il libro. Riprova.';
+					: mode === 'edit' && saved
+						? 'Le modifiche sono state salvate, ma la copertina non è stata caricata. Puoi riprovare.'
+						: caught instanceof CatalogClientError
+							? caught.message
+							: mode === 'edit'
+								? 'Non sono riuscito a salvare le modifiche. Riprova.'
+								: 'Non sono riuscito ad aggiungere il libro. Riprova.';
 		} finally {
 			busy = false;
 		}

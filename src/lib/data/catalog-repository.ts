@@ -205,7 +205,10 @@ export class ServerCatalogRepository implements CatalogRepository {
 				};
 			}
 
-			return await withUser(userId, async (tx) => {
+			// Cover personale obsoleta dopo il cambio di edizione: si azzera in transazione
+			// e il file si cancella dopo il commit, come in `selectProviderCover`.
+			let staleCoverPath: string | null = null;
+			const result: UpdateBookResponse = await withUser(userId, async (tx) => {
 				const genres = await tx<{ id: number }[]>`
 					select id
 					from public.genres
@@ -213,8 +216,10 @@ export class ServerCatalogRepository implements CatalogRepository {
 				`;
 				const genre = genres[0];
 				if (!genre) throw new DataAccessError('VALIDATION', 'Genere non valido');
-				const books = await tx<{ genre_id: number }[]>`
-					select genre_id
+				const books = await tx<
+					{ genre_id: number; edition_id: string | null; cover_storage_path: string | null }[]
+				>`
+					select genre_id, edition_id::text, cover_storage_path
 					from public.user_books
 					where id = ${bookId}::uuid
 					for update
@@ -265,6 +270,18 @@ export class ServerCatalogRepository implements CatalogRepository {
 							${editionChange.coverUrl}::text
 						)
 					`;
+					// La cover personale ritrae l'edizione lasciata: senza questo reset la nuova
+					// copertina del catalogo resterebbe nascosta. Se l'utente ha scelto una nuova
+					// foto, l'upload successivo al salvataggio la ricrea; se l'edizione non cambia
+					// (stesso id) la cover personale resta al suo posto.
+					if (current.cover_storage_path && current.edition_id !== editionChange.editionId) {
+						staleCoverPath = current.cover_storage_path;
+						await tx`
+							update public.user_books
+							set cover_storage_path = null
+							where id = ${bookId}::uuid
+						`;
+					}
 				}
 				await tx`
 					select public.change_book_series(
@@ -276,6 +293,8 @@ export class ServerCatalogRepository implements CatalogRepository {
 				`;
 				return { status: 'updated', bookId, reviewScoresReset };
 			});
+			await this.dropFile(userId, staleCoverPath);
+			return result;
 		} catch (error) {
 			throw normalizeError(error);
 		}

@@ -7,9 +7,12 @@
 	interface Props {
 		/** ISBN-13 valido letto dal codice a barre o digitato. */
 		onscan: (isbn13: string) => void;
+		/** Link alle alternative: chi arriva con una serie precompilata non la perde. */
+		searchHref?: string;
+		manualHref?: string;
 	}
 
-	let { onscan }: Props = $props();
+	let { onscan, searchHref = '/add/search', manualHref = '/add/manual' }: Props = $props();
 
 	type Status =
 		| 'starting'
@@ -418,8 +421,8 @@
 	</form>
 
 	<p class="alt">
-		Preferisci cercare per titolo? <a href="/add/search">Vai alla ricerca</a> ·
-		<a href="/add/manual">Inserisci a mano</a>
+		Preferisci cercare per titolo? <a href={searchHref}>Vai alla ricerca</a> ·
+		<a href={manualHref}>Inserisci a mano</a>
 	</p>
 </section>
 

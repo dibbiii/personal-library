@@ -119,6 +119,8 @@
 			currentYear={props.currentYear}
 			currentYearBooksRead={props.currentYearBooksRead}
 			physicalBooksUnread={counts.physicalUnread}
+			physicalBooks={counts.physical}
+			digitalBooks={counts.digital}
 			totalBooks={counts.total}
 			genreBreakdown={props.genreBreakdown}
 			bingo={props.bingo}

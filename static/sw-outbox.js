@@ -112,7 +112,17 @@ async function flushOutboxFromWorker() {
 
 			if (response.type === 'opaqueredirect' || status === 401 || status === 403) break;
 
+			let acknowledged = false;
 			if (status >= 200 && status < 300 && isJson) {
+				try {
+					await response.json();
+					acknowledged = true;
+				} catch {
+					// A 2xx response with an unreadable JSON body is not a valid ack; retry below.
+				}
+			}
+
+			if (acknowledged) {
 				const tx = db.transaction('outbox', 'readwrite');
 				tx.objectStore('outbox').delete(item.eventId);
 				await idbTransactionDone(tx);

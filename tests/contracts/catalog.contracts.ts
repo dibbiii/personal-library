@@ -111,16 +111,19 @@ import { adminSql, createTestUser, type TestUser } from '../helpers/users';
 		expect(e.editionId).not.toBe(d.editionId);
 	});
 
-	it('reuses SBN and Inventaire records without ISBN, enriches only missing fields', async () => {
+	it('reuses SBN, Inventaire and LOC records without ISBN, enriches only missing fields', async () => {
 		const sbnId = `TST${digits().slice(0, 7)}`;
 		const invId = `inv:${randomUUID().replaceAll('-', '')}`;
+		const locId = `LOC${digits().slice(0, 7)}`;
 		const first = await upsertCatalogEdition(user.id, { title: `Contract ${tag} New sources`, authors: [`Contract ${tag} X`], sbnId, publisher: 'Original' });
-		const second = await upsertCatalogEdition(user.id, { title: 'irrelevant', sbnId, inventaireId: invId, publisher: 'Other', pageCount: 200 });
+		const second = await upsertCatalogEdition(user.id, { title: 'irrelevant', sbnId, inventaireId: invId, locId, publisher: 'Other', pageCount: 200 });
 		expect(second).toEqual({ ...first, created: false });
 		const third = await upsertCatalogEdition(user.id, { title: 'irrelevant', inventaireId: invId });
 		expect(third.editionId).toBe(first.editionId);
-		const [row] = await adminSql()`select sbn_id, inventaire_id, publisher, page_count from public.editions where id = ${first.editionId}::bigint`;
-		expect(row).toEqual({ sbn_id: sbnId, inventaire_id: invId, publisher: 'Original', page_count: 200 });
+		const fourth = await upsertCatalogEdition(user.id, { title: 'irrelevant', locId });
+		expect(fourth.editionId).toBe(first.editionId);
+		const [row] = await adminSql()`select sbn_id, inventaire_id, loc_id, publisher, page_count from public.editions where id = ${first.editionId}::bigint`;
+		expect(row).toEqual({ sbn_id: sbnId, inventaire_id: invId, loc_id: locId, publisher: 'Original', page_count: 200 });
 	});
 
 	it('keeps different ISBN editions separate when a provider reuses an id', async () => {

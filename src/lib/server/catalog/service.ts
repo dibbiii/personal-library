@@ -105,11 +105,15 @@ export class CatalogService {
 
 	async search(request: BookSearchRequest): Promise<CatalogSearchResult> {
 		const sort = request.sort ?? 'relevance';
-		const providers =
-			request.source === 'sbn'
-				? (this.options.fallbackProviders ?? []).filter((provider) => provider.id === 'sbn')
-				: this.options.providers;
-		if (!providers.length) throw new DataAccessError('VALIDATION', 'Catalogo SBN non configurato');
+		const sourceId = request.source && request.source !== 'primary' ? request.source : null;
+		const providers = sourceId
+			? (this.options.fallbackProviders ?? []).filter((provider) => provider.id === sourceId)
+			: this.options.providers;
+		if (!providers.length)
+			throw new DataAccessError(
+				'VALIDATION',
+				sourceId === 'sbn' ? 'Catalogo SBN non configurato' : 'Catalogo non configurato'
+			);
 		const key = [
 			request.title,
 			request.author ?? '',

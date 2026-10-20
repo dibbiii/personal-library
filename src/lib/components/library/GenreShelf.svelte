@@ -324,7 +324,6 @@
 
 	.niche {
 		position: relative;
-		z-index: 0;
 		display: flex;
 		flex: none;
 		align-items: flex-end;
@@ -366,6 +365,7 @@
 
 	.item {
 		position: relative;
+		z-index: 1;
 		display: flex;
 		flex: none;
 		touch-action: pan-x pan-y;
@@ -427,6 +427,8 @@
 	}
 
 	.empty {
+		position: relative;
+		z-index: 1;
 		display: flex;
 		flex: none;
 		flex-direction: column;
@@ -454,6 +456,8 @@
 	}
 
 	.sentinel {
+		position: relative;
+		z-index: 1;
 		display: flex;
 		flex: none;
 		align-items: center;

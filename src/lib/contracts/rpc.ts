@@ -276,7 +276,7 @@ export const bookSearchRequestSchema = z.object({
 	author: z.string().trim().min(1).optional(),
 	language: z.string().trim().min(1).max(16).optional(),
 	sort: bookSearchSortSchema.optional(),
-	source: z.enum(['primary', 'sbn']).optional()
+	source: z.enum(['primary', 'sbn', 'loc']).optional()
 });
 
 export const isbnLookupRequestSchema = z.object({

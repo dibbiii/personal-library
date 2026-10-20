@@ -133,6 +133,7 @@ export function candidateKey(candidate: EditionCandidate): string {
 		ids.openLibraryEditionId ??
 		ids.inventaireId ??
 		ids.sbnId ??
+		ids.locId ??
 		ids.openLibraryWorkId ??
 		candidate.editionTitle
 	);

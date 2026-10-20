@@ -21,6 +21,8 @@ export interface FetchJsonOptions {
 	fetch?: FetchLike | undefined;
 	/** Solo questi host (nessun fetch di URL arbitrari) */
 	allowedHosts: readonly string[];
+	/** Intestazioni extra (es. chiave API); unite ai default. */
+	headers?: Record<string, string> | undefined;
 	signal?: AbortSignal | undefined;
 	timeoutMs?: number | undefined;
 }
@@ -53,7 +55,7 @@ export async function fetchJson(url: string, options: FetchJsonOptions): Promise
 			gateFor(parsed.hostname).check();
 		}
 		response = await doFetch(url, {
-			headers: { accept: 'application/json', 'user-agent': USER_AGENT },
+			headers: { accept: 'application/json', 'user-agent': USER_AGENT, ...options.headers },
 			signal,
 			redirect: 'manual'
 		});
@@ -78,7 +80,7 @@ export async function fetchJson(url: string, options: FetchJsonOptions): Promise
 				gateFor(target.hostname).check();
 			}
 			response = await doFetch(url, {
-				headers: { accept: 'application/json', 'user-agent': USER_AGENT },
+				headers: { accept: 'application/json', 'user-agent': USER_AGENT, ...options.headers },
 				signal,
 				redirect: 'manual'
 			});

@@ -545,6 +545,7 @@ async function upsertBookEdition(
 		googleBooksId: ids.googleBooksId,
 		inventaireId: ids.inventaireId ?? null,
 		sbnId: ids.sbnId ?? null,
+		locId: ids.locId ?? null,
 		isbn10: metadata.isbn?.isbn10 ?? null,
 		isbn13: metadata.isbn?.isbn13 ?? null,
 		language: metadata.language,

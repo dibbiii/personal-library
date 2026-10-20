@@ -6,6 +6,8 @@ import { DiscoverService } from './discover';
 import { serverEnv } from '../db/env';
 import { InventaireProvider } from './inventaire';
 import { SbnProvider } from './sbn';
+import { LocProvider } from './loc';
+import { IsbnDbProvider } from './isbndb';
 
 export { CatalogService } from './service';
 export { OpenLibraryProvider } from './open-library';
@@ -13,6 +15,8 @@ export { GoogleBooksProvider } from './google-books';
 export { RateLimiter } from './rate-limit';
 export { BookInfoService } from './book-info';
 export { DiscoverService } from './discover';
+export { LocProvider } from './loc';
+export { IsbnDbProvider } from './isbndb';
 
 const globalKey = Symbol.for('segnalibro.catalogService.v4');
 const globals = globalThis as unknown as Record<symbol, CatalogService | undefined>;
@@ -29,7 +33,9 @@ export function getCatalogService(): CatalogService {
 		],
 		fallbackProviders: [
 			new InventaireProvider(),
-			...(serverEnv('SBN_BRIDGE_URL') ? [new SbnProvider(serverEnv('SBN_BRIDGE_URL')!)] : [])
+			new LocProvider(),
+			...(serverEnv('SBN_BRIDGE_URL') ? [new SbnProvider(serverEnv('SBN_BRIDGE_URL')!)] : []),
+			...(serverEnv('ISBNDB_API_KEY') ? [new IsbnDbProvider(serverEnv('ISBNDB_API_KEY')!)] : [])
 		]
 	}));
 }

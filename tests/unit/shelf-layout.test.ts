@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { layoutShelf } from '../../src/lib/book/shelf-layout';
 import type { BookSummary } from '../../src/lib/contracts';
@@ -75,5 +76,28 @@ describe('layoutShelf', () => {
 
 	it('scaffale vuoto: nessun elemento', () => {
 		expect(layoutShelf({ books: [], genre: 'classics', queuedIds: new Set() })).toEqual([]);
+	});
+
+	it('mantiene la nicchia ad arco (.niche::before) dietro ai libri nello stacking context dello scaffale', () => {
+		const genreShelfCss = readFileSync(
+			new URL('../../src/lib/components/library/GenreShelf.svelte', import.meta.url),
+			'utf8'
+		);
+		const shelfGridCss = readFileSync(
+			new URL('../../src/lib/components/genre/ShelfGrid.svelte', import.meta.url),
+			'utf8'
+		);
+
+		// .niche non deve creare uno stacking context locale con z-index: 0 che porterebbe ::before davanti ai libri precedenti
+		expect(genreShelfCss).toMatch(/\.niche\s*\{[^}]*position:\s*relative;/);
+		expect(genreShelfCss).not.toMatch(/\.niche\s*\{[^}]*z-index:\s*0;/);
+		expect(genreShelfCss).toMatch(/\.niche::before\s*\{[^}]*z-index:\s*-1;/);
+		expect(genreShelfCss).toMatch(/\.item\s*\{[^}]*z-index:\s*1;/);
+		expect(genreShelfCss).toMatch(/\.empty\s*\{[^}]*z-index:\s*1;/);
+
+		expect(shelfGridCss).toMatch(/\.grid\s*\{[^}]*isolation:\s*isolate;/);
+		expect(shelfGridCss).not.toMatch(/\.niche\s*\{[^}]*z-index:\s*0;/);
+		expect(shelfGridCss).toMatch(/\.niche::before\s*\{[^}]*z-index:\s*-1;/);
+		expect(shelfGridCss).toMatch(/\.cell\s*\{[^}]*z-index:\s*1;/);
 	});
 });

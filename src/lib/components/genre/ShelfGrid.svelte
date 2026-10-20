@@ -288,6 +288,7 @@
 		--cover-h: calc(var(--col) * 50 / 34);
 		--line: calc(var(--top) + var(--cover-h));
 		--pitch: calc(var(--cover-h) + 138px);
+		isolation: isolate;
 		display: grid;
 		grid-template-columns: repeat(3, var(--col));
 		grid-auto-rows: var(--pitch);
@@ -341,6 +342,7 @@
 
 	.cell {
 		position: relative;
+		z-index: 1;
 		min-width: 0;
 		padding-top: var(--top);
 	}
@@ -405,6 +407,7 @@
 
 	/* Oggetti in fondo all'ultima mensola, in una nicchia ad arco */
 	.deco {
+		z-index: 0;
 		display: flex;
 		align-items: flex-end;
 		justify-content: center;
@@ -414,7 +417,6 @@
 
 	.niche {
 		position: relative;
-		z-index: 0;
 		display: flex;
 		align-items: flex-end;
 		justify-content: center;

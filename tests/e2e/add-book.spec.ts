@@ -208,7 +208,7 @@ test.describe('aggiungi un libro', () => {
 		const sheet = page.getByRole('dialog', { name: 'Aggiungi alla libreria' });
 		await expect(sheet).toBeVisible();
 		await expect(sheet.getByRole('radiogroup', { name: 'Genere' }).getByRole('radio')).toHaveCount(
-			7
+			8
 		);
 		await expect(sheet.getByRole('radiogroup', { name: 'Formato' }).getByRole('radio')).toHaveCount(
 			3
@@ -591,6 +591,65 @@ test.describe('aggiungi un libro', () => {
 		}
 	});
 
+	test('LOC: ricerca esplicita e salvataggio della scheda senza ISBN', async ({
+		page,
+		account
+	}) => {
+		const locId = `LOC${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
+		const locTitle = `Libro LOC ${randomUUID().slice(0, 8)}`;
+		await page.route('**/api/catalog/search*', (route) => {
+			const params = new URL(route.request().url()).searchParams;
+			return route.fulfill({
+				json: {
+					contractVersion: 1,
+					degraded: false,
+					providers: {},
+					candidates:
+						params.get('source') === 'loc'
+							? [
+									candidate({
+										provider: 'loc',
+										workTitle: locTitle,
+										editionTitle: locTitle,
+										language: 'en',
+										providerIds: {
+											openLibraryWorkId: null,
+											openLibraryEditionId: null,
+											googleBooksId: null,
+											locId
+										},
+										coverUrl: null
+									})
+								]
+							: []
+				}
+			});
+		});
+		await page.route('**/api/catalog/info*', (route) => route.fulfill({ json: { info: null } }));
+		await page.goto('/add/search?q=Clean%20Code');
+		await expect(page.getByText(/Nessun risultato per/)).toBeVisible();
+		const locButton = page.getByRole('button', { name: 'Cerca nel catalogo Library of Congress' });
+		await expect(locButton).toBeVisible();
+		await locButton.click();
+		await expect(
+			page.getByText('Risultati dal catalogo della Library of Congress (fino a 10 schede).')
+		).toBeVisible();
+		await page.getByLabel('Risultati da').selectOption('loc');
+		const results = page.getByRole('list', { name: 'Risultati della ricerca' });
+		await results.getByRole('button').click();
+		await page.getByRole('button', { name: 'Aggiungi alla mia libreria' }).click();
+		await pickGenreAndAdd(page, 'Classici');
+		await page.waitForURL(/\/book\/[0-9a-f-]{36}$/);
+		const db = admin();
+		try {
+			const [row] =
+				await db`select e.loc_id from public.editions e join public.user_books b on b.edition_id=e.id where b.user_id=${account.id}::uuid and e.loc_id=${locId}`;
+			expect(row?.loc_id).toBe(locId);
+		} finally {
+			await db.end();
+		}
+	});
+
 	test('edizioni: carica due pagine e salva l’edizione senza ereditare pagine o copertina', async ({
 		page,
 		account
@@ -679,6 +738,7 @@ test.describe('aggiungi un libro', () => {
 		);
 		const title = `Foto manuale ${randomUUID().slice(0, 8)}`;
 		await page.goto('/add/manual');
+		await page.waitForLoadState('networkidle');
 		await page.getByLabel('Titolo').fill(title);
 		await page.getByLabel('Autore', { exact: true }).fill('Autore Foto');
 		await page

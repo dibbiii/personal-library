@@ -41,7 +41,9 @@
 		{ value: 'open-library', label: 'Open Library' },
 		{ value: 'google-books', label: 'Google Books' },
 		{ value: 'inventaire', label: 'Inventaire' },
-		{ value: 'sbn', label: 'SBN' }
+		{ value: 'sbn', label: 'SBN' },
+		{ value: 'loc', label: 'Library of Congress' },
+		{ value: 'isbndb', label: 'ISBNdb' }
 	] as const;
 
 	let query = $state(untrack(() => initialQuery));
@@ -61,7 +63,7 @@
 	let providerFilter = $state<(typeof PROVIDERS)[number]['value']>('all');
 	let visibleCount = $state(RESULTS_PER_PAGE);
 	let author = $state('');
-	let selectedCatalog = $state<'primary' | 'sbn'>('primary');
+	let selectedCatalog = $state<'primary' | 'sbn' | 'loc'>('primary');
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let controller: AbortController | undefined;
@@ -199,7 +201,7 @@
 		return isbn ? manualHref('', isbn.isbn13) : manualHref(text);
 	}
 
-	function searchCatalog(source: 'primary' | 'sbn') {
+	function searchCatalog(source: 'primary' | 'sbn' | 'loc') {
 		clearTimeout(timer);
 		selectedCatalog = source;
 		providerFilter = 'all';
@@ -304,18 +306,34 @@
 			</label>
 		</details>
 	{/if}
-	{#if sbnEnabled && !queryIsbn && trimmed.length >= MIN_LENGTH}
-		<Button
-			variant="secondary"
-			disabled={status === 'loading'}
-			onclick={() => searchCatalog(selectedCatalog === 'sbn' ? 'primary' : 'sbn')}
-		>
-			{selectedCatalog === 'sbn'
-				? 'Torna alla ricerca generale'
-				: 'Cerca nel catalogo italiano SBN'}
-		</Button>
+	{#if !queryIsbn && trimmed.length >= MIN_LENGTH}
+		<div class="catalog-actions">
+			{#if sbnEnabled}
+				<Button
+					variant="secondary"
+					disabled={status === 'loading'}
+					onclick={() => searchCatalog(selectedCatalog === 'sbn' ? 'primary' : 'sbn')}
+				>
+					{selectedCatalog === 'sbn'
+						? 'Torna alla ricerca generale'
+						: 'Cerca nel catalogo italiano SBN'}
+				</Button>
+			{/if}
+			<Button
+				variant="secondary"
+				disabled={status === 'loading'}
+				onclick={() => searchCatalog(selectedCatalog === 'loc' ? 'primary' : 'loc')}
+			>
+				{selectedCatalog === 'loc'
+					? 'Torna alla ricerca generale'
+					: 'Cerca nel catalogo Library of Congress'}
+			</Button>
+		</div>
 		{#if selectedCatalog === 'sbn'}<p class="hint">
 				Risultati dal catalogo delle biblioteche italiane SBN (fino a 10 schede).
+			</p>{/if}
+		{#if selectedCatalog === 'loc'}<p class="hint">
+				Risultati dal catalogo della Library of Congress (fino a 10 schede).
 			</p>{/if}
 	{/if}
 
@@ -571,6 +589,12 @@
 
 	.hint.warn {
 		color: var(--color-danger);
+	}
+
+	.catalog-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
 	}
 
 	.filters {

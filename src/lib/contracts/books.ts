@@ -131,6 +131,11 @@ export const providerIdsSchema = z.object({
 		.string()
 		.regex(/^[A-Z0-9]{10}$/)
 		.nullable()
+		.optional(),
+	locId: z
+		.string()
+		.regex(/^[A-Z0-9][A-Z0-9 ]{0,31}$/)
+		.nullable()
 		.optional()
 });
 

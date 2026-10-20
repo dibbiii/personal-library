@@ -127,7 +127,8 @@ una sola chiamata.
 ### Fallback ISBN e catalogo italiano
 
 Google Books e Open Library sono interrogati in parallelo. Se manca una scheda con ISBN esatto,
-autore, editore, pagine e cover, si prova Inventaire, poi SBN se configurato. Le fonti successive
+autore, editore, pagine e cover, si prova Inventaire, poi la Library of Congress, poi SBN se
+configurato e infine ISBNdb se dotata di chiave. Le fonti successive
 arricchiscono solo la stessa edizione, riconosciuta da ISBN o identificatori forti. Un titolo
 identico non giustifica una fusione. Si restituiscono solo le corrispondenze ISBN esatte quando
 presenti; altrimenti la UI segnala chiaramente che i risultati sono alternative da verificare.
@@ -144,6 +145,19 @@ Una ricerca attiva alla volta e distanza minima di un secondo; sovraccarico -> 4
 La ricerca testuale SBN avviene solo premendo "Cerca nel catalogo italiano SBN" (`source=sbn`).
 Il pulsante è disponibile quando `SBN_BRIDGE_URL` è configurata. L'autore facoltativo viene inviato
 come campo strutturato alle fonti. La ricerca normale non contatta SBN o Inventaire.
+
+La Library of Congress (LOC) è sempre attiva: il provider interroga l'endpoint SRU pubblico
+`lx2.loc.gov:210/lcdb` e legge fino a 10 record MARCXML. La ricerca testuale avviene solo premendo
+"Cerca nel catalogo Library of Congress" (`source=loc`); nei fallback resta il lookup ISBN della
+stessa edizione. Dai record MARC si mappano 001 in `loc_id` (LCCN, persistito), 020 (ISBN),
+245 (titolo), 100/110/700 (autori), 260/264 (editore e data), 300 (descrizione fisica) e
+008/041 (date e lingua). La migration `213_catalog_loc_id.sql` aggiunge `loc_id` con indice
+unico e la funzione `catalog_upsert_edition_v3`; la v2 resta disponibile per i container
+precedenti durante il rollout.
+
+ISBNdb è opzionale e richiede `ISBNDB_API_KEY`: fornisce solo il lookup ISBN, mai la ricerca
+testuale, ed è l'ultimo fallback dopo il bridge SBN. L'ordine di completamento resta quindi
+Inventaire → LOC → SBN (se il bridge è configurato) → ISBNdb (se la chiave è impostata).
 
 Open Library è limitata a una richiesta al secondo per processo. I provider HTTP condividono
 una pausa dopo 429, rispettando `Retry-After` fino a 5 minuti, con coda limitata; niente retry
@@ -163,14 +177,18 @@ ottenuto l'id del libro. Se l'upload fallisce, "Riprova il caricamento" ripete s
    La funzione v1 resta disponibile per i container precedenti durante il rollout.
    `212_catalog_isbn_identity.sql` impedisce di fondere ISBN diversi tramite un identificatore
    del provider riutilizzato: l'edizione nuova conserva l'ISBN, scartando l'id in conflitto.
+   `213_catalog_loc_id.sql` aggiunge `loc_id` (LCCN, indice unico) e `catalog_upsert_edition_v3`.
 3. Avviare con `docker compose up -d app sbn`. L'app usa `SBN_BRIDGE_URL=http://sbn:8080`.
    In sviluppo si può pubblicare il bridge **solo su loopback** (`127.0.0.1:8081:8080`) e
-   impostare `SBN_BRIDGE_URL=http://127.0.0.1:8081`. Senza bridge, Google/Open Library/Inventaire funzionano.
-4. Per testare: `npm run check`, `npx vitest run tests/unit`, `node --test services/sbn/bridge.test.mjs`,
+   impostare `SBN_BRIDGE_URL=http://127.0.0.1:8081`. Senza bridge, Google/Open Library/Inventaire
+   e LOC funzionano.
+4. Per testare: `npm run check`, `npx vitest run tests/unit` (inclusi `tests/unit/catalog-loc.test.ts`
+   e `tests/unit/catalog-isbndb.test.ts`), `node --test services/sbn/bridge.test.mjs`,
    `RUN_DB_CONTRACT_TESTS=1 npx vitest run tests/contracts/db.contracts.test.ts -t 'catalog writes'`,
    `npx playwright test tests/e2e/add-book.spec.ts`. In PowerShell assegnare la variabile tramite `$env:RUN_DB_CONTRACT_TESTS='1'`.
    I test browser usano dati simulati delle fonti e utenti temporanei; configurare il server
-   con `DATABASE_URL`, `ORIGIN=http://localhost:4173`, `BODY_SIZE_LIMIT=6M` e, per il test SBN, `SBN_BRIDGE_URL`.
+   con `DATABASE_URL`, `ORIGIN=http://localhost:4173`, `BODY_SIZE_LIMIT=6M` e, per il test SBN,
+   `SBN_BRIDGE_URL`. `ISBNDB_API_KEY` è facoltativa: senza chiave il fallback ISBNdb resta disattivo.
 
 Riferimenti ufficiali: [Google Books list](https://developers.google.com/books/docs/v1/reference/volumes/list),
 [Open Library Search](https://openlibrary.org/dev/docs/api/search),
@@ -200,6 +218,7 @@ campi servono solo a popolare il catalogo, che l'app legge ma non mostra ad altr
 ## Variabili d'ambiente
 
 - `GOOGLE_BOOKS_API_KEY` (opzionale, solo server).
+- `ISBNDB_API_KEY` (opzionale, solo server): abilita il lookup ISBN verso ISBNdb, ultimo fallback.
 - `STORAGE_DIR` per i file caricati.
 - Produzione con `adapter-node`: il corpo delle richieste è limitato a 512 kB di default; per
   l'upload delle cover impostare `BODY_SIZE_LIMIT=6M`.

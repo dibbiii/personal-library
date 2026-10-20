@@ -27,6 +27,8 @@ export interface CatalogEditionInput {
 	openLibraryEditionId?: string | null;
 	inventaireId?: string | null;
 	sbnId?: string | null;
+	/** Library of Congress control number (LCCN normalizzato). */
+	locId?: string | null;
 	coverProvider?: string | null;
 	coverRef?: string | null;
 	coverUrl?: string | null;
@@ -53,7 +55,7 @@ export async function upsertCatalogEdition(
 
 	return withUser(userId, async (tx) => {
 		const rows = await tx<{ result: CatalogEditionResult }[]>`
-			select app.catalog_upsert_edition_v2(
+			select app.catalog_upsert_edition_v3(
 				p_title                   => ${input.title},
 				p_authors                 => ${input.authors ?? []}::text[],
 				p_original_title          => ${input.originalTitle ?? null},
@@ -74,7 +76,8 @@ export async function upsertCatalogEdition(
 				p_cover_ref               => ${input.coverRef ?? null},
 				p_cover_url               => ${input.coverUrl ?? null},
 				p_inventaire_id           => ${input.inventaireId ?? null},
-				p_sbn_id                  => ${input.sbnId ?? null}
+				p_sbn_id                  => ${input.sbnId ?? null},
+				p_loc_id                  => ${input.locId ?? null}
 			) as result
 		`;
 		const row = rows[0];

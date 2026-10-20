@@ -171,8 +171,8 @@ export class ServerCatalogRepository implements CatalogRepository {
 				try {
 					const duplicate = await withUser(userId, (tx) =>
 						findDuplicate(tx, {
-							isbn10: isbn?.isbn10 ?? null,
-							isbn13: isbn?.isbn13 ?? null,
+							isbn10: metadata.isbn?.isbn10 ?? null,
+							isbn13: metadata.isbn?.isbn13 ?? null,
 							editionId,
 							title: input.title,
 							author: input.author,

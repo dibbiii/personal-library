@@ -254,10 +254,15 @@ describe('parser LOC SRU', () => {
 
 describe('LocProvider', () => {
 	it('interroga SRU con searchRetrieve/CQL e recordSchema marcxml', async () => {
-		const fetchImpl = vi.fn(async () => new Response(SRU_DUNE));
+		const fetchImpl = vi.fn(async (input: string) => {
+			expect(input).toContain('https://lx2.loc.gov/sru/lcdb');
+			return new Response(SRU_DUNE);
+		});
 		const candidates = await new LocProvider(fetchImpl).lookupIsbn('9780441013593');
 		expect(candidates).toHaveLength(1);
-		const url = new URL(fetchImpl.mock.calls[0]?.[0] as string);
+		const requestUrl = fetchImpl.mock.calls[0]?.[0];
+		if (!requestUrl) throw new Error('La richiesta SRU non è stata inviata');
+		const url = new URL(requestUrl);
 		expect(url.hostname).toBe('lx2.loc.gov');
 		expect(url.pathname).toBe('/sru/lcdb');
 		expect(url.searchParams.get('operation')).toBe('searchRetrieve');

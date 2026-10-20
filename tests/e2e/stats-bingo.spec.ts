@@ -116,6 +116,8 @@ test.describe('Profilo: Statistiche, Bingo, Citazioni, Cimitero', () => {
 		await page.waitForLoadState('networkidle');
 
 		await expect(page.getByTestId('physical-unread-stat')).toContainText('1 / 4');
+		await expect(page.getByTestId('physical-books-stat')).toContainText('3');
+		await expect(page.getByTestId('digital-books-stat')).toContainText('1');
 		const currentYearCard = page.getByTestId('current-year-books-stat');
 		await expect(currentYearCard).toContainText('2');
 

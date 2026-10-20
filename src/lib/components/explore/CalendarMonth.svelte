@@ -142,6 +142,7 @@
 	}
 
 	.dot {
+		appearance: none;
 		position: relative;
 		display: inline-flex;
 		align-items: center;

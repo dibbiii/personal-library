@@ -19,6 +19,8 @@
 		currentYear: number;
 		currentYearBooksRead: number;
 		physicalBooksUnread: number;
+		physicalBooks: number;
+		digitalBooks: number;
 		totalBooks: number;
 		stats: YearStats;
 		genreBreakdown: { slug: GenreSlug; count: number }[];
@@ -35,6 +37,8 @@
 		currentYear,
 		currentYearBooksRead,
 		physicalBooksUnread,
+		physicalBooks,
+		digitalBooks,
 		totalBooks,
 		stats,
 		genreBreakdown,
@@ -123,6 +127,26 @@
 		>
 			<p class="value v30">{formatNumber(physicalBooksUnread)} / {formatNumber(totalBooks)}</p>
 			<p class="sub">cartacei non letti / libri totali</p>
+		</StatCard>
+
+		<StatCard
+			icon="format-paper"
+			label="Libri cartacei"
+			class="physical-books"
+			testId="physical-books-stat"
+		>
+			<p class="value v30">{formatNumber(physicalBooks)}</p>
+			<p class="sub">in libreria</p>
+		</StatCard>
+
+		<StatCard
+			icon="format-digital"
+			label="Libri digitali"
+			class="digital-books"
+			testId="digital-books-stat"
+		>
+			<p class="value v30">{formatNumber(digitalBooks)}</p>
+			<p class="sub">in libreria</p>
 		</StatCard>
 
 		<StatCard

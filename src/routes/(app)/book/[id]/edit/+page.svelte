@@ -80,7 +80,7 @@
 		actionLabel="Continua alla personalizzazione"
 		actionIcon="pencil"
 		allowMetadataCustomization={false}
-		allowCoverAttachment={false}
+		allowCoverAttachment={true}
 	/>
 </main>
 

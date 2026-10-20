@@ -60,10 +60,10 @@ describe('sfondo del pallino', () => {
 
 	it('tre o piu generi: conic-gradient a segmenti uguali', () => {
 		expect(daySegmentsBackground(['A', 'B', 'C'])).toBe(
-			'conic-gradient(A 0 33.333%, B 0 66.667%, C 0)'
+			'conic-gradient(A 0% 33.333%, B 33.333% 66.667%, C 66.667% 100%)'
 		);
 		expect(daySegmentsBackground(['A', 'B', 'C', 'D'])).toBe(
-			'conic-gradient(A 0 25%, B 0 50%, C 0 75%, D 0)'
+			'conic-gradient(A 0% 25%, B 25% 50%, C 50% 75%, D 75% 100%)'
 		);
 	});
 

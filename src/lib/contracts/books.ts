@@ -131,6 +131,12 @@ export const providerIdsSchema = z.object({
 		.string()
 		.regex(/^[A-Z0-9]{10}$/)
 		.nullable()
+		.optional(),
+	/** Numero di controllo del record LC (MARCXML 001), non persistito sul database. */
+	locId: z
+		.string()
+		.regex(/^[0-9]{5,12}$/)
+		.nullable()
 		.optional()
 });
 

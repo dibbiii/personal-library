@@ -176,6 +176,15 @@
 		<div>
 			<h1>Aggiungi un libro</h1>
 			<p class="subtitle">Cerca un libro, scansiona il codice ISBN o inseriscilo manualmente.</p>
+			{#if initialSeries}
+				<p class="series-context" data-testid="add-series-context">
+					{#if initialSeries.number === null}
+						Aggiungi un volume di {initialSeries.name}
+					{:else}
+						Aggiungi volume {String(initialSeries.number).replace('.', ',')} di {initialSeries.name}
+					{/if}
+				</p>
+			{/if}
 		</div>
 		<a class="cancel" href={exitHref}>
 			Annulla
@@ -213,7 +222,11 @@
 				{/key}
 			{:else if mode === 'scan'}
 				{#if scanPhase === 'scan'}
-					<ISBNScanner {onscan} />
+					<ISBNScanner
+						{onscan}
+						searchHref={buildAddHref('/add/search', context.genre, seriesParams)}
+						manualHref={manualAddHref('')}
+					/>
 				{:else if scanPhase === 'lookup'}
 					<p class="status" role="status" aria-live="polite">
 						<span class="spinner" aria-hidden="true"></span>
@@ -348,6 +361,13 @@
 		font-size: 16px;
 		line-height: 1.4;
 		color: var(--color-text-secondary);
+	}
+
+	.series-context {
+		margin: 8px 0 0;
+		font-size: 15px;
+		font-weight: 700;
+		color: var(--color-primary);
 	}
 
 	.cancel {

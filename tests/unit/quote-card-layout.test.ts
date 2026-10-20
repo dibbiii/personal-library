@@ -161,6 +161,9 @@ describe('renderQuoteCard', () => {
 		expect(drawnText).toContain('Il nome del vento');
 		expect(drawnText).toContain('Patrick Rothfuss · p. 42');
 		expect(drawnText).not.toContain('Fantasy');
+		expect(drawnText).toContain('«');
+		expect(drawnText).toContain('»');
+		expect(drawnText).not.toContain('“');
 	});
 });
 

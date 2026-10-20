@@ -28,7 +28,8 @@ const providerStatusMapSchema = z.object({
 	'open-library': providerStatusSchema.optional(),
 	'google-books': providerStatusSchema.optional(),
 	inventaire: providerStatusSchema.optional(),
-	sbn: providerStatusSchema.optional()
+	sbn: providerStatusSchema.optional(),
+	loc: providerStatusSchema.optional()
 });
 
 export const catalogSearchResponseSchema = bookSearchResponseSchema.extend({

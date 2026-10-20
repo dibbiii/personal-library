@@ -127,7 +127,10 @@ una sola chiamata.
 ### Fallback ISBN e catalogo italiano
 
 Google Books e Open Library sono interrogati in parallelo. Se manca una scheda con ISBN esatto,
-autore, editore, pagine e cover, si prova Inventaire, poi SBN se configurato. Le fonti successive
+autore, editore, pagine e cover, si prova Inventaire, poi un catalogo istituzionale scelto dal gruppo
+di registrazione dell'ISBN (non dalla lingua dell'utente): 978-88 e 979-12 restano su SBN se configurato,
+978-0 e 978-1 vanno alla Library of Congress, gli altri gruppi restano su SBN come prima. LOC non ha
+copertine e non richiede chiavi o variabili d'ambiente. Le fonti successive
 arricchiscono solo la stessa edizione, riconosciuta da ISBN o identificatori forti. Un titolo
 identico non giustifica una fusione. Si restituiscono solo le corrispondenze ISBN esatte quando
 presenti; altrimenti la UI segnala chiaramente che i risultati sono alternative da verificare.
@@ -143,7 +146,12 @@ Il bridge non pubblica porte in Compose, non è collegato alla rete proxy e gira
 Una ricerca attiva alla volta e distanza minima di un secondo; sovraccarico -> 429.
 La ricerca testuale SBN avviene solo premendo "Cerca nel catalogo italiano SBN" (`source=sbn`).
 Il pulsante è disponibile quando `SBN_BRIDGE_URL` è configurata. L'autore facoltativo viene inviato
-come campo strutturato alle fonti. La ricerca normale non contatta SBN o Inventaire.
+come campo strutturato alle fonti. La ricerca normale non contatta SBN, Inventaire o LOC.
+
+LOC usa SRU su `https://lx2.loc.gov/sru/lcdb` (`searchRetrieve`, CQL `bath.isbn`, `recordSchema=marcxml`),
+senza chiave API. Il MARCXML è letto nell'app con la stessa mappatura dei campi del bridge SBN
+(245 titolo, 100/110 autori, 020 ISBN, 264/260 editore e data, 300 pagine, 041/008 lingua);
+non si esegue YAZ. Timeout 7 secondi, stessa pausa dopo 429 degli altri provider HTTP, niente retry.
 
 Open Library è limitata a una richiesta al secondo per processo. I provider HTTP condividono
 una pausa dopo 429, rispettando `Retry-After` fino a 5 minuti, con coda limitata; niente retry
@@ -165,7 +173,7 @@ ottenuto l'id del libro. Se l'upload fallisce, "Riprova il caricamento" ripete s
    del provider riutilizzato: l'edizione nuova conserva l'ISBN, scartando l'id in conflitto.
 3. Avviare con `docker compose up -d app sbn`. L'app usa `SBN_BRIDGE_URL=http://sbn:8080`.
    In sviluppo si può pubblicare il bridge **solo su loopback** (`127.0.0.1:8081:8080`) e
-   impostare `SBN_BRIDGE_URL=http://127.0.0.1:8081`. Senza bridge, Google/Open Library/Inventaire funzionano.
+   	impostare `SBN_BRIDGE_URL=http://127.0.0.1:8081`. Senza bridge, Google/Open Library/Inventaire/LOC funzionano.
 4. Per testare: `npm run check`, `npx vitest run tests/unit`, `node --test services/sbn/bridge.test.mjs`,
    `RUN_DB_CONTRACT_TESTS=1 npx vitest run tests/contracts/db.contracts.test.ts -t 'catalog writes'`,
    `npx playwright test tests/e2e/add-book.spec.ts`. In PowerShell assegnare la variabile tramite `$env:RUN_DB_CONTRACT_TESTS='1'`.
@@ -179,6 +187,7 @@ Riferimenti ufficiali: [Google Books list](https://developers.google.com/books/d
 [Inventaire OpenAPI](https://inventaire.io/public/api_specs.json),
 [SBN Z39.50](https://opac.sbn.it/accesso-z39.50-a-opac-sbn),
 [YAZ client](https://software.indexdata.com/yaz/doc/yaz-client.html),
+[LOC SRU](https://www.loc.gov/standards/sru/),
 [MARC21](https://www.loc.gov/marc/bibliographic/).
 Nessuna fonte garantisce tutte le edizioni o tutte le copertine: il fallback manuale resta necessario.
 

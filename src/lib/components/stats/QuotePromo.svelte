@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Icon from '$lib/components/ui/Icon.svelte';
 	import type { GenreSlug, QuotePreview } from '$lib/contracts';
-	import { GENRE_SHORT_LABELS } from '$lib/genres';
+	import { abbreviateAuthor } from './format';
 
 	interface Props {
 		quotes: QuotePreview[];
@@ -13,6 +13,7 @@
 	interface Sample {
 		text: string;
 		title: string;
+		author: string;
 		genre: GenreSlug;
 	}
 
@@ -21,11 +22,13 @@
 		{
 			text: 'Non ho scelto di restare: sono rimasta.',
 			title: 'Circe',
+			author: 'Madeline Miller',
 			genre: 'mythology-epic-retelling'
 		},
 		{
 			text: 'Certe montagne si salgono per tornare.',
 			title: 'Le otto montagne',
+			author: 'Paolo Cognetti',
 			genre: 'contemporary-historical'
 		}
 	];
@@ -33,7 +36,12 @@
 	function toSample(quote: QuotePreview | undefined, index: number): Sample {
 		const sample = fallback[index] ?? fallback[0]!;
 		if (!quote) return sample;
-		return { text: quote.body, title: quote.bookTitle, genre: quote.genre.slug };
+		return {
+			text: quote.body,
+			title: quote.bookTitle,
+			author: quote.author,
+			genre: quote.genre.slug
+		};
 	}
 
 	const first = $derived(toSample(quotes[0], 0));
@@ -65,14 +73,14 @@
 			style="--base: var(--genre-{first.genre}); --ink: var(--genre-{first.genre}-on-base)"
 		>
 			<span class="text">«{first.text}»</span>
-			<span class="caption">{first.title}<br />{GENRE_SHORT_LABELS[first.genre]}</span>
+			<span class="caption">{first.title}<br />{abbreviateAuthor(first.author)}</span>
 		</div>
 		<div
 			class="mini b"
 			style="--base: var(--genre-{second.genre}); --light: var(--genre-{second.genre}-light); --dark: var(--genre-{second.genre}-dark)"
 		>
 			<span class="text">«{second.text}»</span>
-			<span class="caption">{second.title}<br />{GENRE_SHORT_LABELS[second.genre]}</span>
+			<span class="caption">{second.title}<br />{abbreviateAuthor(second.author)}</span>
 		</div>
 	</div>
 </div>

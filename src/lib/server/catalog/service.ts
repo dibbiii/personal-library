@@ -2,7 +2,7 @@ import { DataAccessError } from '$lib/data/errors';
 import type { EditionCandidate } from '$lib/contracts/books';
 import type { BookSearchRequest } from '$lib/contracts/rpc';
 import { CATALOG_TTL, TtlCache } from '$lib/catalog/cache';
-import { parseIsbn } from '$lib/catalog/isbn';
+import { institutionalCatalogFor, parseIsbn } from '$lib/catalog/isbn';
 import { dedupeCandidates } from '$lib/catalog/merge';
 import {
 	hasIsbnMatch,
@@ -22,7 +22,9 @@ import type {
 export interface CatalogServiceOptions {
 	/** In ordine di priorità dei campi in caso di fusione (Open Library prima). */
 	providers: readonly BookProvider[];
-	/** ISBN only, in fallback order. SBN text search requires explicit source=sbn. */
+	/** ISBN only, in fallback order. SBN text search requires explicit source=sbn.
+	 * SBN e LOC sono i cataloghi istituzionali: per ogni ISBN viene interrogato solo
+	 * quello del suo gruppo di registrazione (vedi `institutionalCatalogFor`). */
 	fallbackProviders?: readonly BookProvider[];
 	/** Limite dei risultati testuali, prima della paginazione nel browser. */
 	maxSearchCandidates?: number;
@@ -182,6 +184,7 @@ export class CatalogService {
 					this.options.providers,
 					true
 				);
+				const institutional = institutionalCatalogFor(isbn13);
 				for (const provider of this.options.fallbackProviders ?? []) {
 					const completeExact = dedupeCandidates(collected.candidates).some(
 						(candidate) =>
@@ -192,6 +195,13 @@ export class CatalogService {
 							!candidate.authors.includes('Autore sconosciuto')
 					);
 					if (completeExact) break;
+					// SBN (Italia) e LOC (Stati Uniti/Regno Unito) coprono gruppi editoriali diversi:
+					// si interroga solo il catalogo del gruppo dell'ISBN cercato.
+					if (
+						(provider.id === 'sbn' || provider.id === 'loc') &&
+						provider.id !== institutional
+					)
+						continue;
 					const fallback = await this.collect((p) => p.lookupIsbn(isbn13), [provider], true);
 					collected.candidates.push(...fallback.candidates);
 					Object.assign(collected.providers, fallback.providers);

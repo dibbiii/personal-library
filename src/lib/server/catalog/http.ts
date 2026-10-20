@@ -27,11 +27,16 @@ export interface FetchJsonOptions {
 	timeoutMs?: number | undefined;
 }
 
+interface FetchCoreOptions extends FetchJsonOptions {
+	/** Intestazione `accept` della richiesta (JSON per impostazione predefinita). */
+	accept: string;
+}
+
 /**
- * GET JSON verso un host in allow-list, con timeout. `null` su 404 (risorsa assente).
+ * GET verso un host in allow-list, con timeout. `null` su 404 (risorsa assente).
  * Errori mappati: 429 -> RATE_LIMITED, timeout/rete/5xx -> NETWORK, altro -> SERVER.
  */
-export async function fetchJson(url: string, options: FetchJsonOptions): Promise<unknown | null> {
+async function fetchAllowlisted(url: string, options: FetchCoreOptions): Promise<Response | null> {
 	const parsed = new URL(url);
 	if (
 		parsed.protocol !== 'https:' ||
@@ -55,7 +60,7 @@ export async function fetchJson(url: string, options: FetchJsonOptions): Promise
 			gateFor(parsed.hostname).check();
 		}
 		response = await doFetch(url, {
-			headers: { accept: 'application/json', 'user-agent': USER_AGENT, ...options.headers },
+			headers: { accept: options.accept, 'user-agent': USER_AGENT, ...options.headers },
 			signal,
 			redirect: 'manual'
 		});
@@ -80,7 +85,7 @@ export async function fetchJson(url: string, options: FetchJsonOptions): Promise
 				gateFor(target.hostname).check();
 			}
 			response = await doFetch(url, {
-				headers: { accept: 'application/json', 'user-agent': USER_AGENT, ...options.headers },
+				headers: { accept: options.accept, 'user-agent': USER_AGENT, ...options.headers },
 				signal,
 				redirect: 'manual'
 			});
@@ -119,12 +124,34 @@ export async function fetchJson(url: string, options: FetchJsonOptions): Promise
 	if (!response.ok) {
 		throw new DataAccessError('SERVER', `Il servizio ha risposto ${response.status}`);
 	}
+	return response;
+}
 
+async function readBody(response: Response): Promise<string> {
 	try {
 		const text = await response.text();
 		if (text.length > MAX_BODY_CHARS) throw new Error('risposta troppo grande');
-		return JSON.parse(text) as unknown;
+		return text;
 	} catch (error) {
 		throw new DataAccessError('CONTRACT', 'Risposta del catalogo non valida', error);
 	}
+}
+
+/** GET JSON verso un host in allow-list, con timeout. `null` su 404 (risorsa assente). */
+export async function fetchJson(url: string, options: FetchJsonOptions): Promise<unknown | null> {
+	const response = await fetchAllowlisted(url, { ...options, accept: 'application/json' });
+	if (response === null) return null;
+	try {
+		return JSON.parse(await readBody(response)) as unknown;
+	} catch (error) {
+		if (error instanceof DataAccessError) throw error;
+		throw new DataAccessError('CONTRACT', 'Risposta del catalogo non valida', error);
+	}
+}
+
+/** Come `fetchJson`, ma per risposte testuali (SRU/MARCXML). `null` su 404. */
+export async function fetchText(url: string, options: FetchJsonOptions): Promise<string | null> {
+	const response = await fetchAllowlisted(url, { ...options, accept: 'application/xml' });
+	if (response === null) return null;
+	return readBody(response);
 }

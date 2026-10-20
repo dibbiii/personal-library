@@ -8,6 +8,7 @@
 import type { CatalogRepository } from './repositories';
 import { DataAccessError } from './errors';
 import type { BookSearchRequest, BookSearchResponse, IsbnLookupRequest } from '../contracts/rpc';
+import type { EditionCandidate } from '../contracts/books';
 import { openLibraryCoverByIsbn } from '../catalog/covers';
 import { parseIsbn } from '../catalog/isbn';
 import { parsePublishedDate } from '../catalog/published-date';
@@ -68,39 +69,55 @@ export class ServerCatalogRepository implements CatalogRepository {
 	// --- Aggiunta alla libreria ------------------------------------------------------------------
 
 	async addBook(userId: string, input: AddBookInput): Promise<AddBookResponse> {
-		const isbn = input.isbn ? parseIsbn(input.isbn) : null;
-		if (input.isbn && !isbn) throw new DataAccessError('VALIDATION', 'ISBN non valido');
+		const requestedIsbn = input.isbn ? parseIsbn(input.isbn) : null;
+		if (input.isbn && !requestedIsbn) throw new DataAccessError('VALIDATION', 'ISBN non valido');
 
+		const trustedEdition = input.edition
+			? await resolveCatalogEdition(this.service, input.edition, requestedIsbn)
+			: null;
+		const metadata = trustedEdition
+			? {
+					title: trustedEdition.editionTitle,
+					author: trustedEdition.authors.join(', '),
+					pageCount: trustedEdition.pageCount,
+					language: trustedEdition.language,
+					isbn: candidateIsbn(trustedEdition),
+					coverUrl: trustedEdition.coverUrl
+				}
+			: {
+					title: input.title,
+					author: input.author,
+					pageCount: input.pageCount,
+					language: input.language,
+					isbn: requestedIsbn,
+					coverUrl: input.coverUrl
+				};
+
+		let editionId: string | null = null;
 		try {
 			const duplicate = await withUser(userId, (tx) =>
 				findDuplicate(tx, {
-					isbn10: isbn?.isbn10 ?? null,
-					isbn13: isbn?.isbn13 ?? null,
+					isbn10: metadata.isbn?.isbn10 ?? null,
+					isbn13: metadata.isbn?.isbn13 ?? null,
 					editionId: null,
-					title: input.title,
-					author: input.author,
+					title: metadata.title,
+					author: metadata.author,
 					includeTitleMatch: !input.force
 				})
 			);
 			if (duplicate) return duplicate;
 
-			let editionId: string | null = null;
-			if (input.edition) {
-				editionId = await upsertBookEdition(userId, input.edition, {
-					isbn,
-					language: input.language,
-					pageCount: input.pageCount,
-					coverUrl: input.coverUrl
-				});
+				if (trustedEdition) {
+					editionId = await upsertBookEdition(userId, trustedEdition);
 
 				// La stessa edizione può essere già in libreria senza ISBN (id del provider).
 				const again = await withUser(userId, (tx) =>
 					findDuplicate(tx, {
-						isbn10: null,
-						isbn13: null,
+						isbn10: metadata.isbn?.isbn10 ?? null,
+						isbn13: metadata.isbn?.isbn13 ?? null,
 						editionId,
-						title: input.title,
-						author: input.author,
+						title: metadata.title,
+						author: metadata.author,
 						includeTitleMatch: false
 					})
 				);
@@ -126,11 +143,11 @@ export class ServerCatalogRepository implements CatalogRepository {
 						cover_url, source
 					)
 					select
-						${userId}::uuid, ${editionId}::bigint, g.id, ${input.title}::text, ${input.author}::text,
-						${input.pageCount}::integer, ${input.language}::text,
-						${isbn?.isbn10 ?? null}::text, ${isbn?.isbn13 ?? null}::text, ${input.format}::text,
+						${userId}::uuid, ${editionId}::bigint, g.id, ${metadata.title}::text, ${metadata.author}::text,
+						${metadata.pageCount}::integer, ${metadata.language}::text,
+						${metadata.isbn?.isbn10 ?? null}::text, ${metadata.isbn?.isbn13 ?? null}::text, ${input.format}::text,
 						${series?.name ?? null}::text, ${series?.number ?? null}::numeric,
-						${series?.total ?? null}::smallint, ${input.coverUrl}::text, ${input.source}::text
+						${series?.total ?? null}::smallint, ${metadata.coverUrl}::text, ${input.source}::text
 					from public.genres g
 					where g.slug = ${input.genre} and g.is_active
 					returning id::text
@@ -150,6 +167,23 @@ export class ServerCatalogRepository implements CatalogRepository {
 				return { status: 'added' as const, bookId: row.id };
 			});
 		} catch (error) {
+			if (isUserBookIdentityViolation(error)) {
+				try {
+					const duplicate = await withUser(userId, (tx) =>
+						findDuplicate(tx, {
+							isbn10: isbn?.isbn10 ?? null,
+							isbn13: isbn?.isbn13 ?? null,
+							editionId,
+							title: input.title,
+							author: input.author,
+							includeTitleMatch: false
+						})
+					);
+					if (duplicate) return duplicate;
+				} catch (lookupError) {
+					throw normalizeError(lookupError);
+				}
+			}
 			throw normalizeError(error);
 		}
 	}
@@ -185,27 +219,33 @@ export class ServerCatalogRepository implements CatalogRepository {
 				) {
 					throw new DataAccessError('VALIDATION', 'Dati incompleti per la nuova edizione');
 				}
-				const isbn = input.isbn ? parseIsbn(input.isbn) : null;
-				if (input.isbn && !isbn) throw new DataAccessError('VALIDATION', 'ISBN non valido');
-				const editionId = await upsertBookEdition(userId, input.edition, {
-					isbn,
-					language: input.language,
-					pageCount: input.pageCount,
-					coverUrl: input.coverUrl
-				});
+				const requestedIsbn = input.isbn ? parseIsbn(input.isbn) : null;
+				if (input.isbn && !requestedIsbn) {
+					throw new DataAccessError('VALIDATION', 'ISBN non valido');
+				}
+				const trustedEdition = await resolveCatalogEdition(
+					this.service,
+					input.edition,
+					requestedIsbn
+				);
+				const isbn = candidateIsbn(trustedEdition);
+				const editionId = await upsertBookEdition(userId, trustedEdition);
 				editionChange = {
 					editionId,
-					title: input.title,
-					author: input.author,
-					pageCount: input.pageCount,
-					language: input.language,
+					title: trustedEdition.editionTitle,
+					author: trustedEdition.authors.join(', '),
+					pageCount: trustedEdition.pageCount,
+					language: trustedEdition.language,
 					isbn10: isbn?.isbn10 ?? null,
 					isbn13: isbn?.isbn13 ?? null,
-					coverUrl: input.coverUrl
+					coverUrl: trustedEdition.coverUrl
 				};
 			}
 
-			return await withUser(userId, async (tx) => {
+			// Cover personale obsoleta dopo il cambio di edizione: si azzera in transazione
+			// e il file si cancella dopo il commit, come in `selectProviderCover`.
+			let staleCoverPath: string | null = null;
+			const result: UpdateBookResponse = await withUser(userId, async (tx) => {
 				const genres = await tx<{ id: number }[]>`
 					select id
 					from public.genres
@@ -213,8 +253,10 @@ export class ServerCatalogRepository implements CatalogRepository {
 				`;
 				const genre = genres[0];
 				if (!genre) throw new DataAccessError('VALIDATION', 'Genere non valido');
-				const books = await tx<{ genre_id: number }[]>`
-					select genre_id
+				const books = await tx<
+					{ genre_id: number; edition_id: string | null; cover_storage_path: string | null }[]
+				>`
+					select genre_id, edition_id::text, cover_storage_path
 					from public.user_books
 					where id = ${bookId}::uuid
 					for update
@@ -265,6 +307,18 @@ export class ServerCatalogRepository implements CatalogRepository {
 							${editionChange.coverUrl}::text
 						)
 					`;
+					// La cover personale ritrae l'edizione lasciata: senza questo reset la nuova
+					// copertina del catalogo resterebbe nascosta. Se l'utente ha scelto una nuova
+					// foto, l'upload successivo al salvataggio la ricrea; se l'edizione non cambia
+					// (stesso id) la cover personale resta al suo posto.
+					if (current.cover_storage_path && current.edition_id !== editionChange.editionId) {
+						staleCoverPath = current.cover_storage_path;
+						await tx`
+							update public.user_books
+							set cover_storage_path = null
+							where id = ${bookId}::uuid
+						`;
+					}
 				}
 				await tx`
 					select public.change_book_series(
@@ -276,6 +330,8 @@ export class ServerCatalogRepository implements CatalogRepository {
 				`;
 				return { status: 'updated', bookId, reviewScoresReset };
 			});
+			await this.dropFile(userId, staleCoverPath);
+			return result;
 		} catch (error) {
 			throw normalizeError(error);
 		}
@@ -468,6 +524,27 @@ function normalizeError(error: unknown): Error {
 	return error instanceof Error ? error : new DataAccessError('SERVER', 'Errore imprevisto', error);
 }
 
+const USER_BOOK_IDENTITY_INDEXES = new Set([
+	'user_books_user_edition_uidx',
+	'user_books_user_isbn_10_uidx',
+	'user_books_user_isbn_13_uidx'
+]);
+
+function isUserBookIdentityViolation(error: unknown): boolean {
+	if (typeof error !== 'object' || error === null) return false;
+	const pgError = error as {
+		code?: unknown;
+		constraint_name?: unknown;
+		constraint?: unknown;
+	};
+	const constraint = pgError.constraint_name ?? pgError.constraint;
+	return (
+		pgError.code === '23505' &&
+		typeof constraint === 'string' &&
+		USER_BOOK_IDENTITY_INDEXES.has(constraint)
+	);
+}
+
 interface DuplicateQuery {
 	isbn10: string | null;
 	isbn13: string | null;
@@ -525,17 +602,83 @@ async function findDuplicate(tx: Tx, query: DuplicateQuery): Promise<AddBookResp
 	return null;
 }
 
-async function upsertBookEdition(
-	userId: string,
-	edition: NonNullable<AddBookInput['edition']>,
-	metadata: {
-		isbn: ReturnType<typeof parseIsbn>;
-		language: string | null;
-		pageCount: number | null;
-		coverUrl: string | null;
+type SubmittedEdition = NonNullable<AddBookInput['edition']>;
+type ProviderIdField = keyof SubmittedEdition['providerIds'];
+
+const providerIdentityFields: Partial<
+	Record<SubmittedEdition['provider'], readonly ProviderIdField[]>
+> = {
+	'open-library': ['openLibraryEditionId', 'openLibraryWorkId'],
+	'google-books': ['googleBooksId'],
+	inventaire: ['inventaireId'],
+	sbn: ['sbnId'],
+	loc: ['locId']
+};
+
+async function resolveCatalogEdition(
+	service: CatalogService,
+	submitted: SubmittedEdition,
+	requestedIsbn: ReturnType<typeof parseIsbn>
+): Promise<EditionCandidate> {
+	const identityFields = providerIdentityFields[submitted.provider];
+	if (!identityFields) {
+		throw new DataAccessError('VALIDATION', 'Provider dell’edizione non valido');
 	}
-): Promise<string> {
+
+	let candidates: EditionCandidate[];
+	if (requestedIsbn) {
+		candidates = (await service.lookupIsbn(requestedIsbn.isbn13)).candidates;
+	} else {
+		const title = submitted.workTitle.trim().slice(0, 200);
+		if (title.length < 2) {
+			throw new DataAccessError('VALIDATION', 'Titolo insufficiente per verificare l’edizione');
+		}
+		const author = submitted.authors[0]?.trim().slice(0, 120);
+		const request: BookSearchRequest = {
+			title,
+			...(author ? { author } : {}),
+			...(submitted.provider === 'sbn' ? { source: 'sbn' } : {})
+		};
+		candidates = (await service.search(request)).candidates;
+	}
+
+	const matchingIdentity = candidates.filter((candidate) => {
+		if (candidate.provider === 'manual') return false;
+		const hasPrimaryIdentity = identityFields.some((field) => {
+			const id = submitted.providerIds[field];
+			return typeof id === 'string' && id.length > 0 && candidate.providerIds[field] === id;
+		});
+		if (!hasPrimaryIdentity) return false;
+
+		// Do not quietly accept extra client-supplied IDs that the provider response does not know.
+		return Object.entries(submitted.providerIds).every(([field, id]) => {
+			if (id === null || id === undefined) return true;
+			return candidate.providerIds[field as ProviderIdField] === id;
+		});
+	});
+	if (matchingIdentity.length === 0) {
+		throw new DataAccessError('VALIDATION', 'Edizione non verificata dal catalogo');
+	}
+
+	if (requestedIsbn) {
+		const matchingIsbn = matchingIdentity.find(
+			(candidate) => candidateIsbn(candidate)?.isbn13 === requestedIsbn.isbn13
+		);
+		if (!matchingIsbn) {
+			throw new DataAccessError('VALIDATION', 'ISBN non corrisponde all’edizione verificata');
+		}
+		return matchingIsbn;
+	}
+	return matchingIdentity[0] as EditionCandidate;
+}
+
+function candidateIsbn(edition: EditionCandidate): ReturnType<typeof parseIsbn> {
+	return parseIsbn(edition.isbn13 ?? edition.isbn10 ?? '');
+}
+
+async function upsertBookEdition(userId: string, edition: EditionCandidate): Promise<string> {
 	const published = parsePublishedDate(edition.publishedDate);
+	const isbn = candidateIsbn(edition);
 	const ids = edition.providerIds;
 	const result = await upsertCatalogEdition(userId, {
 		title: edition.workTitle,
@@ -546,15 +689,15 @@ async function upsertBookEdition(
 		inventaireId: ids.inventaireId ?? null,
 		sbnId: ids.sbnId ?? null,
 		locId: ids.locId ?? null,
-		isbn10: metadata.isbn?.isbn10 ?? null,
-		isbn13: metadata.isbn?.isbn13 ?? null,
-		language: metadata.language,
+		isbn10: isbn?.isbn10 ?? null,
+		isbn13: isbn?.isbn13 ?? null,
+		language: edition.language,
 		publisher: edition.publisher,
 		publishedDate: published.date,
 		publishedYear: published.year,
-		pageCount: metadata.pageCount,
-		coverProvider: metadata.coverUrl ? edition.provider : null,
-		coverUrl: metadata.coverUrl
+		pageCount: edition.pageCount,
+		coverProvider: edition.coverUrl ? edition.provider : null,
+		coverUrl: edition.coverUrl
 	});
 	return result.editionId;
 }

@@ -14,6 +14,7 @@ import {
   themeDefinitionSchema,
   yearStatsResponseSchema,
 } from '../../src/lib/contracts';
+import { profileSummarySchema } from '../../src/lib/contracts/performance';
 import { segnalibroTheme } from '../../src/lib/themes';
 
 const genre = {
@@ -189,6 +190,35 @@ describe('contract schemas', () => {
       topTags: [{ id: 1, slug: 'magic', label: 'Magia', count: 1 }],
     };
     expect(yearStatsResponseSchema.parse({ contractVersion: 1, stats }).stats).toEqual(stats);
+  });
+
+  it('keeps lifetime and selected-year DNF counts distinct in profile summaries', () => {
+    const summary = {
+      contractVersion: 1,
+      counts: {
+        total: 0,
+        read: 0,
+        reading: 0,
+        unread: 0,
+        physical: 0,
+        physicalUnread: 0,
+        digital: 0,
+        both: 0,
+        englishRead: 0,
+        reread: 0,
+      },
+      queueCount: 0,
+      quoteCount: 0,
+      dnfCount: 3,
+      dnfCountForYear: 1,
+      favorites: [],
+      queue: [],
+      reading: [],
+      dnf: [],
+      activity: [],
+    };
+
+    expect(profileSummarySchema.parse(summary)).toEqual(summary);
   });
 
   it('validates stats dashboard', () => {

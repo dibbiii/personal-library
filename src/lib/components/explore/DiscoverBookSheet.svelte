@@ -11,13 +11,15 @@
 	interface Props {
 		/** Libro aperto; null = chiuso. */
 		book: DiscoverBook | null;
+		/** Lingua applicata ai risultati; null quando il filtro è "Tutte". */
+		language: string | null;
 		/** Id del libro se è già in libreria. */
 		ownedId: string | null;
 		onclose: () => void;
 		onadd: (draft: BookDraft) => void;
 	}
 
-	let { book, ownedId, onclose, onadd }: Props = $props();
+	let { book, language, ownedId, onclose, onadd }: Props = $props();
 
 	const uid = $props.id();
 
@@ -38,15 +40,33 @@
 
 		const controller = new AbortController();
 		fetchBookInfo(
-			{ title: current.workTitle, author: current.authors[0] ?? '', language: 'it' },
+			{
+				title: current.workTitle,
+				author: current.authors[0] ?? '',
+				language
+			},
 			controller.signal
 		)
 			.then((result) => {
 				info = result;
-				// Senza ISBN si propone la prima edizione (in italiano e con copertina, se c'è):
-				// l'utente può sceglierne un'altra prima di aggiungere.
+				const usableEditions =
+					result?.editions.filter((item) => item.isbn13 && item.coverUrl) ?? [];
+				const preferredLanguage = current.language ?? language;
+				const discoveredEdition = current.editionId
+					? usableEditions.find(
+							(item) =>
+								item.url.endsWith(`/books/${current.editionId}`) &&
+								(!preferredLanguage || !item.language || item.language === preferredLanguage)
+						)
+					: undefined;
+				// Preferisci l'edizione scoperta, poi una nella lingua selezionata. Se il risultato
+				// identifica già un'edizione con copertina e lingua, non sostituirla con un'altra lingua.
 				const edition =
-					result?.editions.find((item) => item.isbn13 && item.coverUrl) ?? result?.editions[0];
+					discoveredEdition ??
+					usableEditions.find((item) => preferredLanguage && item.language === preferredLanguage) ??
+					(current.editionId && current.coverUrl && preferredLanguage
+						? undefined
+						: usableEditions[0]);
 				if (result && edition && draft && !draft.isbn) {
 					draft = draftWithEdition(draft, edition, result.workUrl);
 				}

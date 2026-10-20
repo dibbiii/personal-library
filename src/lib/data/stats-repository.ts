@@ -1,6 +1,7 @@
 import {
 	readingCalendarResponseSchema,
 	statsDashboardResponseSchema,
+	yearDnfCountResponseSchema,
 	yearStatsResponseSchema
 } from '../contracts/rpc';
 
@@ -27,6 +28,10 @@ export class RpcStatsRepository implements StatsRepository {
 
 	async getYearStats(year: number) {
 		return callRpc(this.transport, RPC.yearStats, { p_year: year }, yearStatsResponseSchema);
+	}
+
+	async getYearDnfCount(year: number) {
+		return callRpc(this.transport, RPC.yearDnfCount, { p_year: year }, yearDnfCountResponseSchema);
 	}
 
 	async getDashboard(year: number) {

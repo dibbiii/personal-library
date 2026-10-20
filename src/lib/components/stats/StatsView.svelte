@@ -18,7 +18,10 @@
 		year: number;
 		currentYear: number;
 		currentYearBooksRead: number;
+		dnfCount: number;
 		physicalBooksUnread: number;
+		physicalBooks: number;
+		digitalBooks: number;
 		totalBooks: number;
 		stats: YearStats;
 		genreBreakdown: { slug: GenreSlug; count: number }[];
@@ -34,7 +37,10 @@
 		year,
 		currentYear,
 		currentYearBooksRead,
+		dnfCount,
 		physicalBooksUnread,
+		physicalBooks,
+		digitalBooks,
 		totalBooks,
 		stats,
 		genreBreakdown,
@@ -126,6 +132,26 @@
 		</StatCard>
 
 		<StatCard
+			icon="format-paper"
+			label="Libri cartacei"
+			class="physical-books"
+			testId="physical-books-stat"
+		>
+			<p class="value v30">{formatNumber(physicalBooks)}</p>
+			<p class="sub">in libreria</p>
+		</StatCard>
+
+		<StatCard
+			icon="format-digital"
+			label="Libri digitali"
+			class="digital-books"
+			testId="digital-books-stat"
+		>
+			<p class="value v30">{formatNumber(digitalBooks)}</p>
+			<p class="sub">in libreria</p>
+		</StatCard>
+
+		<StatCard
 			icon="check"
 			label="Libri letti nel {currentYear}"
 			class="current-year-books"
@@ -141,8 +167,8 @@
 		</StatCard>
 
 		<StatCard icon="flower" label="Libri non finiti" class="dnf-count">
-			<p class="value v24">{formatNumber(dnf.length)}</p>
-			<p class="sub">{countLabel(dnf.length, 'abbandonato', 'abbandonati')} nel {year}</p>
+			<p class="value v24">{formatNumber(dnfCount)}</p>
+			<p class="sub">{countLabel(dnfCount, 'abbandonato', 'abbandonati')} nel {year}</p>
 		</StatCard>
 
 		<StatCard icon="tag" label="Tag più usati" class="tags">

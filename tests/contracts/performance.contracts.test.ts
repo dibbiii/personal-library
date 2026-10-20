@@ -31,7 +31,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 		await closeAdminSql();
 	});
 	it('counts all 5000 books but sends only five favorites and four activities', async () => {
-		const result = await repo.getProfileSummary(true, 4);
+		const result = await repo.getProfileSummary(true, 4, 2026);
 		expect(result.counts).toMatchObject({
 			total: 5000,
 			read: 2500,
@@ -41,8 +41,9 @@ import { mkdir, writeFile } from 'node:fs/promises';
 		});
 		expect(result.favorites).toHaveLength(5);
 		expect(result.quoteCount).toBe(601);
+		expect(result.dnfCountForYear).toBe(0);
 		expect(result.activity.length).toBeLessThanOrEqual(4);
-		const minimal = await repo.getProfileSummary(false, 0);
+		const minimal = await repo.getProfileSummary(false, 0, 2026);
 		expect(minimal.favorites).toHaveLength(0);
 		expect(minimal.activity).toHaveLength(0);
 	});
@@ -112,7 +113,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 		for (let n = 0; n < 5; n++) {
 			for (const [label, name, args] of [
 				['oldHome', 'get_library_home', { p_shelf_limit: 100 }],
-				['summary', 'get_profile_summary', { p_collections: true, p_activity_limit: 4 }],
+				['summary', 'get_profile_summary', { p_collections: true, p_activity_limit: 4, p_year: 2026 }],
 				['discovery', 'get_discovery_context', {}],
 				['genreFirst', 'get_genre_pages', { p_genre_slug: 'classics', p_read_page: 1, p_unread_page: 1 }],
 				['genreLast', 'get_genre_pages', { p_genre_slug: 'classics', p_read_page: 63, p_unread_page: 63 }],

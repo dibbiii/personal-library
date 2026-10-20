@@ -106,6 +106,10 @@
 		return Object.keys(next).length === 0;
 	}
 
+	function closeIfNotBusy() {
+		if (!busy) onclose();
+	}
+
 	async function submit(force = false) {
 		if (!draft || busy) return;
 		error = '';
@@ -121,6 +125,7 @@
 		}
 
 		busy = true;
+		let saved = false; // aggiornamento riuscito: un errore successivo riguarda solo la copertina
 		try {
 			const series = seriesRefFromFields(seriesName, numberValue, totalValue);
 			if (mode === 'edit' && bookId) {
@@ -132,6 +137,8 @@
 					duplicate = { ...result.existing, exact: true };
 					return;
 				}
+				saved = true;
+				if (draft.coverFile) await uploadCover(bookId, draft.coverFile);
 				onclose();
 				onsaved?.(result.reviewScoresReset);
 				return;
@@ -152,11 +159,13 @@
 			error =
 				mode === 'add' && addedBookId
 					? 'Il libro è stato aggiunto, ma la copertina non è stata caricata. Puoi riprovare oppure aprire il libro.'
-					: caught instanceof CatalogClientError
-						? caught.message
-						: mode === 'edit'
-							? 'Non sono riuscito a salvare le modifiche. Riprova.'
-							: 'Non sono riuscito ad aggiungere il libro. Riprova.';
+					: mode === 'edit' && saved
+						? 'Le modifiche sono state salvate, ma la copertina non è stata caricata. Puoi riprovare.'
+						: caught instanceof CatalogClientError
+							? caught.message
+							: mode === 'edit'
+								? 'Non sono riuscito a salvare le modifiche. Riprova.'
+								: 'Non sono riuscito ad aggiungere il libro. Riprova.';
 		} finally {
 			busy = false;
 		}
@@ -169,7 +178,7 @@
 	{open}
 	title={mode === 'edit' ? 'Modifica libro' : 'Aggiungi alla libreria'}
 	subtitle={mode === 'edit' ? 'Conferma le modifiche' : 'Conferma come vuoi averlo'}
-	{onclose}
+	onclose={closeIfNotBusy}
 >
 	{#if draft}
 		<div class="preview">
@@ -201,7 +210,9 @@
 							Aggiungi comunque
 						</Button>
 					{/if}
-					<Button variant="ghost" fullWidth onclick={onclose}>Annulla</Button>
+					<Button variant="ghost" fullWidth disabled={busy} onclick={closeIfNotBusy}>
+						Annulla
+					</Button>
 				</div>
 			</div>
 		{:else}
@@ -294,7 +305,9 @@
 				{/if}
 
 				<div class="actions row">
-					<Button variant="secondary" fullWidth onclick={onclose}>Annulla</Button>
+					<Button variant="secondary" fullWidth disabled={busy} onclick={closeIfNotBusy}>
+						Annulla
+					</Button>
 					<Button type="submit" fullWidth loading={busy}
 						>{mode === 'edit'
 							? 'Salva modifiche'

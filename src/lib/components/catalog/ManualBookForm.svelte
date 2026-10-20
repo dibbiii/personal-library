@@ -62,6 +62,7 @@
 			pageCount: pages.trim() ? Number(pages.trim()) : null,
 			language,
 			isbn: parsed?.isbn13 ?? null,
+			openLibraryEditionId: null,
 			coverUrl: null,
 			publisher: null,
 			publishedDate: null,

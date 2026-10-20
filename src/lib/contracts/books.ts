@@ -46,6 +46,8 @@ export const seriesBookSchema = z.object({
 export const bookSummarySchema = z.object({
 	id: uuidSchema,
 	editionId: catalogIdSchema.nullable(),
+	isbn: z.string().nullable().optional(),
+	openLibraryEditionId: z.string().nullable().optional(),
 
 	title: nonEmptyTextSchema,
 	author: nonEmptyTextSchema,
@@ -132,6 +134,7 @@ export const providerIdsSchema = z.object({
 		.regex(/^[A-Z0-9]{10}$/)
 		.nullable()
 		.optional(),
+	/** Identificatore MARC 001 LOC, persistito come loc_id; puo contenere lettere e spazi. */
 	locId: z
 		.string()
 		.regex(/^[A-Z0-9][A-Z0-9 ]{0,31}$/)

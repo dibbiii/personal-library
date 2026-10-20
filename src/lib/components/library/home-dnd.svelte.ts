@@ -1,7 +1,8 @@
 import { mount, unmount } from 'svelte';
 import type { DraggableOptions, DropTarget, DropZoneOptions } from '$lib/actions/drag';
 import BookCover from '$lib/components/book/BookCover.svelte';
-import { addToQueue, moveInQueue, removeFromQueue } from '$lib/client/queue.svelte';
+	import { addToQueue, moveInQueue, removeFromQueue } from '$lib/client/queue.svelte';
+	import { refreshData } from '$lib/client/refresh-data';
 import { GENRE_LABELS } from '$lib/genres';
 import type { BookSummary, GenreSlug } from '$lib/contracts';
 import type { HomeState } from './home-state.svelte';
@@ -101,6 +102,7 @@ export class HomeDnd {
 				throw new Error(body?.message ?? 'Impossibile spostare il libro.');
 			}
 			const result = (await response.json()) as { reviewScoresReset?: boolean };
+			void refreshData(['app:profile', 'app:library']);
 			this.home.notify(
 				result.reviewScoresReset
 					? `Spostato in ${GENRE_LABELS[slug]}. I voti specifici sono stati azzerati.`

@@ -501,7 +501,13 @@
 				<div id="place"><LibraryPlaceCard {book} queuePosition={detail.queuePosition} /></div>
 				{#if book.series}
 					<div id="series">
-						<SeriesCard series={book.series} books={detail.seriesBooks} currentBookId={book.id} />
+						<SeriesCard
+							series={book.series}
+							books={detail.seriesBooks}
+							currentBookId={book.id}
+							genre={slug}
+							format={book.format}
+						/>
 					</div>
 				{/if}
 			</aside>

@@ -41,6 +41,10 @@ const migration203 = readFileSync(
 	path.resolve(process.cwd(), 'db/migrations/203_canonical_italian_tags.sql'),
 	'utf8'
 );
+const migration218 = readFileSync(
+	path.resolve(process.cwd(), 'db/migrations/218_spicy_psychological_thriller_tags.sql'),
+	'utf8'
+);
 
 describe('dimensioni per genere', () => {
 	it('ogni genere ha 5 dimensioni con chiavi uniche e prefisso coerente', () => {
@@ -146,11 +150,13 @@ describe('aggettivi facoltativi', () => {
 });
 
 describe('tag tematici', () => {
-	it('sono i 18 canonici e coincidono con la migration 203', () => {
-		expect(THEME_TAGS).toHaveLength(18);
-		const rows = [...migration203.matchAll(/\('([a-z-]+)',\s*'([^']+)',\s*(\d+),\s*true\)/g)].map(
-			(m) => ({ slug: m[1]!, label: m[2]!, order: Number(m[3]) })
-		);
+	it('sono i 20 canonici e coincidono con le migration 203 e 218', () => {
+		expect(THEME_TAGS).toHaveLength(20);
+		const rows = [
+			...`${migration203}\n${migration218}`.matchAll(
+				/\('([a-z-]+)',\s*'([^']+)',\s*(\d+),\s*true\)/g
+			)
+		].map((m) => ({ slug: m[1]!, label: m[2]!, order: Number(m[3]) }));
 		const defined = THEME_TAGS.map((t, i) => ({ slug: t.slug, label: t.label, order: i + 1 }));
 		expect(rows).toEqual(defined);
 	});
@@ -186,7 +192,7 @@ describe('tag tematici', () => {
 			'Claustrofobico'
 		]);
 		expect(visibleTags(ordered, [], false)).toHaveLength(9);
-		expect(visibleTags(ordered, [], true)).toHaveLength(18);
+		expect(visibleTags(ordered, [], true)).toHaveLength(20);
 		// un tag scelto dopo l'espansione resta visibile anche se richiudi
 		expect(visibleTags(ordered, ['doppia-linea-temporale'], false).map((t) => t.slug)).toContain(
 			'doppia-linea-temporale'
@@ -219,6 +225,30 @@ describe('bozza e salvataggio', () => {
 		});
 		expect(draftFromReview(review, 'thriller-mystery').scores).toEqual({});
 		expect(draftFromReview(null, 'classics')).toEqual(emptyDraft());
+	});
+
+	it('scarta i tag legacy inattivi dal draft e dalla richiesta di salvataggio', () => {
+		const reviewWithLegacyTag = {
+			...review,
+			tags: [...review.tags, { id: 10, slug: 'adventure', label: 'Adventure' }]
+		};
+		const draft = draftFromReview(reviewWithLegacyTag, 'fantasy-magical-gothic');
+
+		expect(draft.tags).toEqual(['magic']);
+		expect(toSaveRequest(review.userBookId, 'fantasy-magical-gothic', draft)?.tagSlugs).toEqual([
+			'magic'
+		]);
+		expect(
+			saveReviewRequestSchema.safeParse(
+				toSaveRequest(review.userBookId, 'fantasy-magical-gothic', draft)
+			).success
+		).toBe(true);
+
+		// Anche una bozza locale precedente che conserva uno slug nascosto non lo reinvia.
+		const staleDraft = { ...draft, tags: [...draft.tags, 'adventure'] };
+		expect(
+			toSaveRequest(review.userBookId, 'fantasy-magical-gothic', staleDraft)?.tagSlugs
+		).toEqual(['magic']);
 	});
 
 	it('richiede solo il voto e conserva 0-3 aggettivi nella richiesta', () => {

@@ -66,7 +66,7 @@ async function seed(userId: string) {
 				(${ids.read}::uuid, ${userId}::uuid, 2, 'Libro Letto', 'Autrice Prova', 300, 'physical', 'manual'),
 				(${ids.unread}::uuid, ${userId}::uuid, 1, 'Libro Non Letto', 'Autore Prova', 200, 'physical', 'manual'),
 				(${ids.dnf}::uuid, ${userId}::uuid, 1, 'Libro Lasciato', 'Autore Lasciato', 500, 'physical', 'manual'),
-				(${ids.reread}::uuid, ${userId}::uuid, 3, 'Riletto e Lasciato', 'Autore Riletto', 400, 'digital', 'manual')
+				(${ids.reread}::uuid, ${userId}::uuid, 3, 'Riletto e Lasciato', 'Autore Riletto', 400, 'both', 'manual')
 		`;
 
 		await tx`select public.add_completed_reading(${ids.read}::uuid, ${timeInCurrentYear(1, 3, 10)}, ${timeInCurrentYear(1, 20, 20)}, 300, 0)`;
@@ -116,6 +116,8 @@ test.describe('Profilo: Statistiche, Bingo, Citazioni, Cimitero', () => {
 		await page.waitForLoadState('networkidle');
 
 		await expect(page.getByTestId('physical-unread-stat')).toContainText('1 / 4');
+		await expect(page.getByTestId('physical-books-stat')).toContainText('4');
+		await expect(page.getByTestId('digital-books-stat')).toContainText('1');
 		const currentYearCard = page.getByTestId('current-year-books-stat');
 		await expect(currentYearCard).toContainText('2');
 

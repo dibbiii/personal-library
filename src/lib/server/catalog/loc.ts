@@ -4,62 +4,141 @@ import { firstValidIsbn } from '$lib/catalog/isbn';
 import { toIso2 } from '$lib/catalog/language';
 import type { BookProvider, ProviderCallOptions } from '$lib/catalog/types';
 import { DataAccessError } from '$lib/data/errors';
-import type { FetchLike } from './http';
+import { fetchText, type FetchLike } from './http';
 
-const USER_AGENT = 'Segnalibro/0.1 (libreria personale; contatto: self-hosted)';
+/** SRU pubblico della Library of Congress (nessuna chiave API). */
+const SRU_ENDPOINT = 'https://lx2.loc.gov/sru/lcdb';
+/** Identificatore del record LC: controlfield MARCXML 001. */
+const LOC_ID = /^[A-Z0-9][A-Z0-9 ]{0,31}$/;
 
-/** I code point numerici non validi vengono scartati invece di far fallire l'unescape. */
+interface MarcDatafield {
+	tag: string;
+	subfields: { code: string; value: string }[];
+}
+
+interface MarcRecord {
+	control: Map<string, string>;
+	datafields: MarcDatafield[];
+}
+
+/** Elemento MARCXML/SRU con prefisso di namespace qualsiasi (zs:, marc:, nessuno). */
+function element(name: string) {
+	return new RegExp(`<([\\w.-]+:)?${name}\\b([^>]*)>([\\s\\S]*?)</([\\w.-]+:)?${name}>`, 'g');
+}
+
+function attribute(source: string, name: string): string | null {
+	return new RegExp(`\\b${name}="([^"]*)"`).exec(source)?.[1] ?? null;
+}
+
 const codePoint = (value: number) =>
 	Number.isInteger(value) && value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : '';
 
-/** Decodifica le entità XML di MARCXML; `&amp;` per ultimo per non doppio-decodificare. */
-const unescapeXml = (value: string) =>
-	value
+function decodeXml(value: string): string {
+	return value
 		.replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => codePoint(parseInt(hex, 16)))
-		.replace(/&#(\d+);/g, (_, digits: string) => codePoint(Number(digits)))
+		.replace(/&#([0-9]+);/g, (_, dec: string) => codePoint(Number(dec)))
 		.replace(/&quot;/g, '"')
 		.replace(/&apos;/g, "'")
 		.replace(/&lt;/g, '<')
 		.replace(/&gt;/g, '>')
 		.replace(/&amp;/g, '&');
+}
 
-/** Valore di un attributo nel testo del tag d'apertura (l'ordine degli attributi non è garantito). */
-const attr = (tag: string, name: string) => new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1] ?? '';
+/** Un blocco `recordData` SRU -> campi MARC (controlfield + datafield/subfield). */
+function parseMarcXmlRecord(inner: string): MarcRecord {
+	const record: MarcRecord = { control: new Map(), datafields: [] };
+	for (const match of inner.matchAll(element('controlfield'))) {
+		const tag = attribute(match[2] ?? '', 'tag');
+		if (tag) record.control.set(tag, decodeXml(match[3] ?? ''));
+	}
+	for (const match of inner.matchAll(element('datafield'))) {
+		const tag = attribute(match[2] ?? '', 'tag');
+		if (!tag) continue;
+		const subfields: { code: string; value: string }[] = [];
+		for (const sub of (match[3] ?? '').matchAll(element('subfield'))) {
+			const code = attribute(sub[2] ?? '', 'code');
+			if (code) subfields.push({ code, value: decodeXml(sub[3] ?? '') });
+		}
+		record.datafields.push({ tag, subfields });
+	}
+	return record;
+}
 
-const controlfields = (record: string, tag: string) =>
-	[...record.matchAll(/<controlfield([^>]*)>([\s\S]*?)<\/controlfield>/g)]
-		.filter((field) => attr(field[1] ?? '', 'tag') === tag)
-		.map((field) => unescapeXml(field[2] ?? ''));
-
-const control = (record: string, tag: string) => controlfields(record, tag)[0] ?? '';
-
-const subfields = (record: string, tag: string, code: string) =>
-	[...record.matchAll(/<datafield([^>]*)>([\s\S]*?)<\/datafield>/g)]
-		.filter((field) => attr(field[1] ?? '', 'tag') === tag)
-		.flatMap((field) =>
-			[...(field[2] ?? '').matchAll(/<subfield([^>]*)>([\s\S]*?)<\/subfield>/g)]
-				.filter((subfield) => attr(subfield[1] ?? '', 'code') === code)
-				.map((subfield) => unescapeXml(subfield[2] ?? ''))
+/** Come `mapMarc` del bridge SBN (`services/sbn/bridge.mjs`), su MARCXML invece di ISO 2709. */
+export function parseLocSru(xml: string, isbn13?: string): EditionCandidate[] {
+	if (
+		!/<([\w.-]+:)?searchRetrieveResponse\b/.test(xml) ||
+		/<([\w.-]+:)?diagnostics\b/.test(xml)
+	)
+		throw new DataAccessError('CONTRACT', 'Risposta LOC non valida');
+	if (/<([\w.-]+:)?numberOfRecords>\s*0\s*</.test(xml)) return [];
+	const recordData = [...xml.matchAll(element('recordData'))].map((match) => match[3] ?? '');
+	const records = recordData.length
+		? recordData
+		: [...xml.matchAll(element('record'))].map((match) => match[3] ?? '');
+	const candidates: EditionCandidate[] = [];
+	for (const recordXml of records) {
+		const record = parseMarcXmlRecord(recordXml);
+		const subfields = (tag: string, code: string) =>
+			record.datafields
+				.filter((field) => field.tag === tag)
+				.flatMap((field) => field.subfields.filter((s) => s.code === code).map((s) => s.value));
+		const clean = (value: string | undefined) =>
+				// MARC non-sorting segments contain control characters.
+				// eslint-disable-next-line no-control-regex
+				value?.replace(/[\x00-\x1f\x7f\x98\x9c]/g, '')
+					.replace(/\s*[/,:;=]\s*$/, '')
+					.trim() || null;
+		const title = clean([...subfields('245', 'a'), ...subfields('245', 'b')].join(' '));
+		const locId = record.control.get('001')?.trim().toUpperCase().replace(/\s+/g, ' ') ?? '';
+		if (!title || !LOC_ID.test(locId)) continue;
+		const authors = [
+			...new Set(
+				[...subfields('100', 'a'), ...subfields('110', 'a'), ...subfields('700', 'a')]
+					.map((name) => clean(name)?.replace(/[\s,.]+$/, '') ?? '')
+					.filter(Boolean)
+			)
+		];
+		// 020$a può portare qualifiche tra parentesi: "9780441013593 (pbk.)".
+		const identifiers = subfields('020', 'a').map((raw) =>
+			firstValidIsbn([raw.replace(/\s*\(.*/, '').trim()])
 		);
+		const isbn =
+			identifiers.find((parsed) => parsed?.isbn13 === isbn13) ?? identifiers.find(Boolean);
+		const publication = [...subfields('264', 'c'), ...subfields('260', 'c')][0];
+		const pageText = subfields('300', 'a')[0] ?? '';
+		const pages = /(?:^|[,;]\s*)(\d{1,5})\s*(?:p\.|pages|pagine)/i.exec(pageText)?.[1];
+		candidates.push({
+			provider: 'loc',
+			providerIds: {
+				openLibraryWorkId: null,
+				openLibraryEditionId: null,
+				googleBooksId: null,
+				locId
+			},
+			workTitle: title,
+			editionTitle: title,
+			authors: authors.length ? authors : ['Autore sconosciuto'],
+			isbn10: isbn?.isbn10 ?? null,
+			isbn13: isbn?.isbn13 ?? null,
+			language: toIso2(
+				subfields('041', 'a')[0] ?? (record.control.get('008')?.slice(35, 38).trim() || null)
+			),
+			publisher: clean([...subfields('264', 'b'), ...subfields('260', 'b')][0]),
+			publishedDate: publication?.match(/\b[12][0-9]{3}\b/)?.[0] ?? null,
+			pageCount: pages && Number(pages) > 0 && Number(pages) <= 20000 ? Number(pages) : null,
+			// LOC non fornisce copertine: solo metadati bibliografici.
+			coverUrl: null,
+			confidence: 0,
+			matchReasons: []
+		});
+	}
+	return candidates;
+}
 
-/** Pulizia come `mapMarc` del bridge SBN: via i caratteri di controllo MARC e la punteggiatura finale. */
-const clean = (value: string | undefined) =>
-	value
-		// I segmenti MARC non-sorting contengono caratteri di controllo.
-		// eslint-disable-next-line no-control-regex
-		?.replace(/[\x00-\x1f\x7f\x98\x9c]/g, '')
-		.replace(/\s*[/,:;=]\s*$/, '')
-		.trim() || null;
+/** Compatibilita con il nome usato dalla prima implementazione locale. */
+export const parseLoc = parseLocSru;
 
-/** Pulizia dei nomi d'autore: via i caratteri di controllo e la virgola/punto finali. */
-const cleanName = (value: string) =>
-	value
-		// eslint-disable-next-line no-control-regex
-		.replace(/[\x00-\x1f\x7f\x98\x9c]/g, '')
-		.replace(/[\s,.]+$/, '')
-		.trim();
-
-/** Sanitizzazione come `buildQuery` del bridge SBN: l'output finisce tra le virgolette della query CQL. */
 const sanitize = (value: string) =>
 	value
 		.normalize('NFD')
@@ -68,130 +147,43 @@ const sanitize = (value: string) =>
 		.replace(/\s+/g, ' ')
 		.trim();
 
-const recordPattern = /<record(?:\s[^>]*)?>[\s\S]*?<\/record>/g;
-
-/**
- * Parsifica una risposta SRU/MARCXML di LOC in candidati edizione (funzione pura, per i test).
- * MARCXML è generato da macchina: il parsing con regex è sufficiente.
- */
-export function parseLoc(xml: string, isbn13?: string): EditionCandidate[] {
-	// La busta SRU è namespaced: <zs:searchRetrieveResponse ...> (il `<` non fa parte del substring).
-	if (!xml.includes('searchRetrieveResponse') || /<(?:zs:)?diagnostics/.test(xml))
-		throw new DataAccessError('CONTRACT', 'Risposta LOC non valida');
-	const numberOfRecords =
-		/<zs:numberOfRecords>\s*([^<]*?)\s*<\/zs:numberOfRecords>/.exec(xml)?.[1] ?? '';
-	if (numberOfRecords === '0') return [];
-	return [...xml.matchAll(recordPattern)].flatMap((match) => {
-		const record = match[0] ?? '';
-		// Titolo = 245$a + 245$b; i record senza titolo vanno scartati.
-		const title = clean(
-			[...subfields(record, '245', 'a'), ...subfields(record, '245', 'b')].join(' ')
-		);
-		if (!title) return [];
-		// LCCN: trim, maiuscole, spazi interni collassati; forma non valida -> null.
-		const rawId = control(record, '001').trim().toUpperCase().replace(/\s+/g, ' ');
-		const locId = /^[A-Z0-9][A-Z0-9 ]{0,31}$/.test(rawId) ? rawId : null;
-		const authors = [
-			...new Set(
-				[
-					...subfields(record, '100', 'a'),
-					...subfields(record, '110', 'a'),
-					...subfields(record, '700', 'a')
-				]
-					.map(cleanName)
-					.filter(Boolean)
-			)
-		];
-		// La parte tra parentesi ("(pbk.)") non fa parte dell'ISBN.
-		const identifiers = subfields(record, '020', 'a').map((value) =>
-			firstValidIsbn([value.replace(/\s*\(.*$/, '').trim()])
-		);
-		const isbn = identifiers.find((id) => id?.isbn13 === isbn13) ?? identifiers.find(Boolean);
-		const language =
-			subfields(record, '041', 'a')[0] ?? (control(record, '008').slice(35, 38).trim() || null);
-		const publication = [...subfields(record, '264', 'c'), ...subfields(record, '260', 'c')][0];
-		const pageText = subfields(record, '300', 'a')[0] ?? '';
-		const pages = /(?:^|[,;]\s*)(\d{1,5})\s*(?:p\.|pages|pagine)/i.exec(pageText)?.[1];
-		return [
-			{
-				provider: 'loc' as const,
-				providerIds: {
-					openLibraryWorkId: null,
-					openLibraryEditionId: null,
-					googleBooksId: null,
-					locId
-				},
-				workTitle: title,
-				editionTitle: title,
-				authors: authors.length ? authors : ['Autore sconosciuto'],
-				isbn10: isbn?.isbn10 ?? null,
-				isbn13: isbn?.isbn13 ?? null,
-				language: toIso2(language),
-				publisher: clean([...subfields(record, '264', 'b'), ...subfields(record, '260', 'b')][0]),
-				publishedDate: publication?.match(/\b[12][0-9]{3}\b/)?.[0] ?? null,
-				pageCount: pages && Number(pages) > 0 && Number(pages) <= 20000 ? Number(pages) : null,
-				coverUrl: null,
-				confidence: 0,
-				matchReasons: []
-			}
-		];
-	});
-}
-
-/**
- * Provider SRU della Library of Congress.
- * Endpoint pubblico: solo http sulla porta 210 (https non disponibile); URL fisso, mai dalla request.
- */
+/** Fallback ISBN istituzionale e ricerca testuale esplicita nella Library of Congress. */
 export class LocProvider implements BookProvider {
 	readonly id = 'loc' as const;
-	private readonly base = new URL('http://lx2.loc.gov:210/lcdb');
-	constructor(private readonly fetchImpl: FetchLike = fetch) {}
+	constructor(private readonly fetchImpl?: FetchLike) {}
 
-	/** Parametri SRU comuni a ogni ricerca. */
-	private params(query: string) {
-		return new URLSearchParams({
-			version: '1.1',
+	private async query(
+		query: string,
+		options?: ProviderCallOptions,
+		isbn13?: string
+	): Promise<EditionCandidate[]> {
+		const params = new URLSearchParams({
 			operation: 'searchRetrieve',
+			version: '1.1',
 			query,
+			recordSchema: 'marcxml',
 			maximumRecords: '10',
-			recordSchema: 'Marcxml'
+			startRecord: '1'
 		});
-	}
-
-	/** GET che ritorna l'XML come stringa: il SRU di LOC non supporta `recordSchema=json`. */
-	private async get(params: URLSearchParams, signal?: AbortSignal): Promise<string> {
-		let response: Response;
-		try {
-			response = await this.fetchImpl(`${this.base}?${params}`, {
-				headers: { accept: 'application/xml', 'user-agent': USER_AGENT },
-				signal: signal
-					? AbortSignal.any([signal, AbortSignal.timeout(10000)])
-					: AbortSignal.timeout(10000),
-				redirect: 'error'
-			});
-		} catch (error) {
-			throw new DataAccessError('NETWORK', 'Catalogo LOC non raggiungibile', error);
-		}
-		if (response.status === 429) throw new DataAccessError('RATE_LIMITED', 'Catalogo LOC occupato');
-		if (!response.ok) throw new DataAccessError('NETWORK', 'Catalogo LOC non disponibile');
-		try {
-			const text = await response.text();
-			if (text.length > 2_000_000) throw new Error('risposta troppo grande');
-			return text;
-		} catch (error) {
-			throw new DataAccessError('CONTRACT', 'Risposta LOC non valida', error);
-		}
+		const xml = await fetchText(SRU_ENDPOINT + '?' + params, {
+			allowedHosts: ['lx2.loc.gov'],
+			fetch: this.fetchImpl,
+			signal: options?.signal
+		});
+		return xml === null ? [] : parseLocSru(xml, isbn13);
 	}
 
 	async search(request: BookSearchRequest, options?: ProviderCallOptions) {
 		const title = sanitize(request.title);
 		if (title.length < 2) return [];
 		const author = request.author ? sanitize(request.author) : '';
-		const query = author ? `dc.title="${title}" and dc.author="${author}"` : `dc.title="${title}"`;
-		return parseLoc(await this.get(this.params(query), options?.signal));
+		const query = author
+			? 'dc.title="' + title + '" and dc.author="' + author + '"'
+			: 'dc.title="' + title + '"';
+		return this.query(query, options);
 	}
 
-	async lookupIsbn(isbn13: string, options?: ProviderCallOptions) {
-		return parseLoc(await this.get(this.params(`bath.isbn=${isbn13}`), options?.signal), isbn13);
+	async lookupIsbn(isbn13: string, options?: ProviderCallOptions): Promise<EditionCandidate[]> {
+		return this.query('bath.isbn=' + isbn13, options, isbn13);
 	}
 }

@@ -110,9 +110,11 @@ export function daySegmentsBackground(colors: readonly string[]): string {
 	if (n === 0) return 'none';
 	if (n === 1) return colors[0] as string;
 	if (n === 2) return `linear-gradient(90deg, ${colors[0]} 50%, ${colors[1]} 50%)`;
-	const stops = colors.map((color, i) =>
-		i === n - 1 ? `${color} 0` : `${color} 0 ${round(((i + 1) / n) * 100)}%`
-	);
+	const stops = colors.map((color, i) => {
+		const start = round((i / n) * 100);
+		const end = round(((i + 1) / n) * 100);
+		return `${color} ${start}% ${end}%`;
+	});
 	return `conic-gradient(${stops.join(', ')})`;
 }
 

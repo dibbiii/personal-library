@@ -3,7 +3,12 @@ import type { BookSearchRequest } from '$lib/contracts/rpc';
 
 /** Provider di metadati supportati (lato server). */
 export type CatalogProviderId =
-	'open-library' | 'google-books' | 'inventaire' | 'sbn' | 'loc' | 'isbndb';
+	| 'open-library'
+	| 'google-books'
+	| 'inventaire'
+	| 'sbn'
+	| 'loc'
+	| 'isbndb';
 
 export interface ProviderCallOptions {
 	signal?: AbortSignal | undefined;

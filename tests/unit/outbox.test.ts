@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
 import {
 	BACKOFF_MAX_MS,
@@ -15,6 +18,107 @@ import {
 	type ReadingOp,
 	type SendOutcome
 } from '../../src/lib/offline/types';
+
+type WorkerRequest = {
+	result: unknown;
+	onsuccess?: () => void;
+	onerror?: () => void;
+};
+
+type WorkerStore = {
+	get: (key: string) => WorkerRequest;
+	index: (name: string) => { getAll: (userId: string) => WorkerRequest };
+	delete: (eventId: string) => void;
+	put: (record: OutboxRecord) => void;
+};
+
+type WorkerTransaction = {
+	oncomplete?: () => void;
+	onerror?: () => void;
+	onabort?: () => void;
+	objectStore: (name: string) => WorkerStore;
+};
+
+type WorkerSyncEvent = {
+	tag: string;
+	waitUntil: (promise: Promise<unknown>) => void;
+};
+
+const workerScript = readFileSync(resolve(process.cwd(), 'static/sw-outbox.js'), 'utf8');
+
+function workerHarness(
+	item: OutboxRecord,
+	response: {
+		status: number;
+		headers: { get: (name: string) => string | null };
+		json: () => Promise<unknown>;
+	}
+) {
+	const outbox = new Map([[item.eventId, item]]);
+	const request = (result: unknown): WorkerRequest => {
+		const req: WorkerRequest = { result };
+		queueMicrotask(() => req.onsuccess?.());
+		return req;
+	};
+	const database = {
+		transaction: (_stores: string | string[]) => {
+			const tx: WorkerTransaction = {
+				objectStore: (_name) => ({
+					get: (key) => request(key === 'userId' ? { value: USER } : undefined),
+					index: (_indexName) => ({
+						getAll: (userId) =>
+							request([...outbox.values()].filter((record) => record.userId === userId))
+					}),
+					delete: (eventId) => {
+						outbox.delete(eventId);
+						queueMicrotask(() => tx.oncomplete?.());
+					},
+					put: (record) => {
+						outbox.set(record.eventId, record);
+						queueMicrotask(() => tx.oncomplete?.());
+					}
+				})
+			};
+			return tx;
+		},
+		close: () => {}
+	};
+	let syncListener: ((event: WorkerSyncEvent) => void) | undefined;
+	const self = {
+		navigator: {},
+		addEventListener: (type: string, listener: (event: WorkerSyncEvent) => void) => {
+			if (type === 'sync') syncListener = listener;
+		}
+	};
+
+	runInNewContext(workerScript, {
+		self,
+		navigator: {},
+		indexedDB: {
+			open: () => {
+				const req: WorkerRequest = { result: database };
+				queueMicrotask(() => req.onsuccess?.());
+				return req;
+			}
+		},
+		fetch: async () => response
+	});
+
+	return {
+		outbox,
+		flush: () => {
+			if (!syncListener) throw new Error('sync listener was not registered');
+			let completion!: Promise<unknown>;
+			syncListener({
+				tag: 'segnalibro-outbox',
+				waitUntil: (promise) => {
+					completion = promise;
+				}
+			});
+			return completion;
+		}
+	};
+}
 
 /** Storage in memoria: stessa semantica di IdbOutboxStorage, senza IndexedDB. */
 class MemoryStorage implements OutboxStorage {
@@ -325,6 +429,56 @@ describe('classificazione delle risposte HTTP', () => {
 		for (const status of [400, 404, 409, 422]) {
 			expect(classifyResponse({ status })).toBe('rejected');
 		}
+	});
+});
+
+describe('service worker outbox', () => {
+	const jsonHeaders = { get: () => 'application/json; charset=utf-8' };
+
+	it('ritenta un 2xx JSON malformato senza rimuovere la voce', async () => {
+		const item: OutboxRecord = {
+			...op(),
+			userId: USER,
+			createdAt: 1,
+			seq: 1,
+			attempts: 0,
+			nextAttemptAt: 0,
+			lastError: null
+		};
+		const harness = workerHarness(item, {
+			status: 200,
+			headers: jsonHeaders,
+			json: async () => {
+				throw new SyntaxError('Invalid JSON');
+			}
+		});
+
+		await expect(harness.flush()).rejects.toThrow('outbox-retry');
+		expect(harness.outbox.get(item.eventId)).toMatchObject({
+			attempts: 1,
+			lastError: 'HTTP 200'
+		});
+		expect(harness.outbox.get(item.eventId)?.nextAttemptAt).toBeGreaterThan(Date.now());
+	});
+
+	it('rimuove la voce dopo aver letto un 2xx JSON valido', async () => {
+		const item: OutboxRecord = {
+			...op(),
+			userId: USER,
+			createdAt: 1,
+			seq: 1,
+			attempts: 0,
+			nextAttemptAt: 0,
+			lastError: null
+		};
+		const harness = workerHarness(item, {
+			status: 200,
+			headers: jsonHeaders,
+			json: async () => ({ ok: true })
+		});
+
+		await harness.flush();
+		expect(harness.outbox.has(item.eventId)).toBe(false);
 	});
 });
 

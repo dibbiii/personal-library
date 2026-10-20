@@ -58,6 +58,51 @@ describe('draftFromBook', () => {
 			edition: null
 		});
 	});
+
+	it('preserves current-edition identity and leaves the draft untouched when it is reselected', () => {
+		const coverFile = { name: 'custom-cover.jpg' } as File;
+		const currentBook: BookSummary = {
+			...book,
+			editionId: '42',
+			isbn: '9780441172719',
+			openLibraryEditionId: 'OL123M'
+		};
+		const draft = {
+			...draftFromBook(currentBook),
+			title: 'My custom title',
+			pageCount: 417,
+			coverFile
+		};
+
+		expect(draft).toMatchObject({
+			isbn: '9780441172719',
+			openLibraryEditionId: 'OL123M'
+		});
+		expect(draftWithEdition(draft, edition, 'https://openlibrary.org/works/OL1W', 'Dune')).toBe(
+			draft
+		);
+		expect(draft.title).toBe('My custom title');
+		expect(draft.pageCount).toBe(417);
+		expect(draft.coverFile).toBe(coverFile);
+
+		const identityOnlyBook: BookSummary = {
+			...currentBook,
+			isbn: null
+		};
+		const identityOnlyDraft = {
+			...draftFromBook(identityOnlyBook),
+			coverFile
+		};
+		expect(
+			draftWithEdition(
+				identityOnlyDraft,
+				{ ...edition, isbn13: null },
+				'https://openlibrary.org/works/OL1W',
+				'Dune'
+			)
+		).toBe(identityOnlyDraft);
+		expect(identityOnlyDraft.coverFile).toBe(coverFile);
+	});
 });
 
 describe('updateBookRequestSchema', () => {

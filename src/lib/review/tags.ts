@@ -1,7 +1,7 @@
 import type { Tag } from '../contracts/reviews';
 
 /**
- * I 18 tag tematici canonici, nell'ordine del DB (`tags.sort_order`).
+ * I 20 tag tematici canonici, nell'ordine del DB (`tags.sort_order`).
  * Gli id numerici li decide il DB: la UI lavora sugli slug, il server li risolve in id.
  */
 export interface ThemeTagDef {
@@ -27,8 +27,17 @@ export const THEME_TAGS: readonly ThemeTagDef[] = [
 	{ slug: 'multi-pov', label: 'Multi-POV' },
 	{ slug: 'doppia-linea-temporale', label: 'Doppia linea temporale' },
 	{ slug: 'crescita-personale', label: 'Crescita personale' },
-	{ slug: 'magic', label: 'Magia' }
+	{ slug: 'magic', label: 'Magia' },
+	{ slug: 'spicy', label: 'Spicy' },
+	{ slug: 'thriller-psicologico', label: 'Thriller psicologico' }
 ];
+
+const ACTIVE_THEME_TAG_SLUGS = new Set(THEME_TAGS.map(({ slug }) => slug));
+
+/** Conserva solo gli slug presenti nel catalogo canonico dei tag attivi. */
+export function filterActiveThemeTagSlugs(slugs: readonly string[]): string[] {
+	return slugs.filter((slug) => ACTIVE_THEME_TAG_SLUGS.has(slug));
+}
 
 export function toggleTag(selected: readonly string[], slug: string): string[] {
 	return selected.includes(slug) ? selected.filter((s) => s !== slug) : [...selected, slug];

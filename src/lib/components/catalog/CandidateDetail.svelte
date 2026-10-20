@@ -7,7 +7,7 @@
 	import RatingStars from '$lib/components/ui/RatingStars.svelte';
 	import CoverAttachment from './CoverAttachment.svelte';
 	import type { BookInfo } from '$lib/catalog/book-info';
-	import { draftWithEdition, type BookDraft } from '$lib/catalog/draft';
+	import { draftWithEdition, isSameEdition, type BookDraft } from '$lib/catalog/draft';
 	import { parsePublishedDate } from '$lib/catalog/published-date';
 	import { LANGUAGE_LABELS, languageLabel } from '$lib/catalog/language';
 	import type { IconName } from '$lib/components/ui/icons';
@@ -162,10 +162,7 @@
 	}
 
 	function isCurrent(edition: BookInfo['editions'][number]): boolean {
-		return (
-			(edition.isbn13 !== null && edition.isbn13 === draft.isbn) ||
-			edition.url.endsWith(`/${draft.edition?.providerIds.openLibraryEditionId}`)
-		);
+		return isSameEdition(draft, edition);
 	}
 
 	function pickEdition(edition: BookInfo['editions'][number]) {

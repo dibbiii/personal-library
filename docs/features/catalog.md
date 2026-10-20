@@ -127,8 +127,10 @@ una sola chiamata.
 ### Fallback ISBN e catalogo italiano
 
 Google Books e Open Library sono interrogati in parallelo. Se manca una scheda con ISBN esatto,
-autore, editore, pagine e cover, si prova Inventaire, poi la Library of Congress, poi SBN se
-configurato e infine ISBNdb se dotata di chiave. Le fonti successive
+autore, editore, pagine e cover, si prova Inventaire, poi un catalogo istituzionale scelto dal gruppo
+di registrazione dell'ISBN (non dalla lingua dell'utente): 978-88 e 979-12 restano su SBN se configurato,
+978-0 e 978-1 vanno alla Library of Congress, gli altri gruppi restano su SBN come prima; ISBNdb
+interviene per ultimo se e configurato. LOC non ha copertine e non richiede chiavi. Le fonti successive
 arricchiscono solo la stessa edizione, riconosciuta da ISBN o identificatori forti. Un titolo
 identico non giustifica una fusione. Si restituiscono solo le corrispondenze ISBN esatte quando
 presenti; altrimenti la UI segnala chiaramente che i risultati sono alternative da verificare.
@@ -144,16 +146,16 @@ Il bridge non pubblica porte in Compose, non è collegato alla rete proxy e gira
 Una ricerca attiva alla volta e distanza minima di un secondo; sovraccarico -> 429.
 La ricerca testuale SBN avviene solo premendo "Cerca nel catalogo italiano SBN" (`source=sbn`).
 Il pulsante è disponibile quando `SBN_BRIDGE_URL` è configurata. L'autore facoltativo viene inviato
-come campo strutturato alle fonti. La ricerca normale non contatta SBN o Inventaire.
+come campo strutturato alle fonti. La ricerca normale non contatta SBN, Inventaire o LOC.
 
-La Library of Congress (LOC) è sempre attiva: il provider interroga l'endpoint SRU pubblico
-`lx2.loc.gov:210/lcdb` e legge fino a 10 record MARCXML. La ricerca testuale avviene solo premendo
-"Cerca nel catalogo Library of Congress" (`source=loc`); nei fallback resta il lookup ISBN della
-stessa edizione. Dai record MARC si mappano 001 in `loc_id` (LCCN, persistito), 020 (ISBN),
-245 (titolo), 100/110/700 (autori), 260/264 (editore e data), 300 (descrizione fisica) e
-008/041 (date e lingua). La migration `213_catalog_loc_id.sql` aggiunge `loc_id` con indice
-unico e la funzione `catalog_upsert_edition_v3`; la v2 resta disponibile per i container
-precedenti durante il rollout.
+LOC usa SRU su `https://lx2.loc.gov/sru/lcdb` (`searchRetrieve`, CQL `bath.isbn`,
+`recordSchema=marcxml`), senza chiave API. Il fallback ISBN lo interroga per i gruppi 978-0 e
+978-1; la ricerca testuale e disponibile solo premendo "Cerca nel catalogo Library of Congress"
+(`source=loc`). Il MARCXML e letto nell'app: 001 diventa `loc_id` persistito, 020 contiene l'ISBN,
+245 il titolo, 100/110/700 gli autori, 260/264 editore e data, 300 la descrizione fisica e
+008/041 la lingua. La migration `213_catalog_loc_id.sql` aggiunge `loc_id` con indice unico e
+la funzione `catalog_upsert_edition_v3`; la v2 resta disponibile per i container precedenti
+durante il rollout. Timeout 7 secondi, stessa pausa dopo 429 degli altri provider HTTP, niente retry.
 
 ISBNdb è opzionale e richiede `ISBNDB_API_KEY`: fornisce solo il lookup ISBN, mai la ricerca
 testuale, ed è l'ultimo fallback dopo il bridge SBN. L'ordine di completamento resta quindi
@@ -197,6 +199,7 @@ Riferimenti ufficiali: [Google Books list](https://developers.google.com/books/d
 [Inventaire OpenAPI](https://inventaire.io/public/api_specs.json),
 [SBN Z39.50](https://opac.sbn.it/accesso-z39.50-a-opac-sbn),
 [YAZ client](https://software.indexdata.com/yaz/doc/yaz-client.html),
+[LOC SRU](https://www.loc.gov/standards/sru/),
 [MARC21](https://www.loc.gov/marc/bibliographic/).
 Nessuna fonte garantisce tutte le edizioni o tutte le copertine: il fallback manuale resta necessario.
 
